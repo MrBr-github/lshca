@@ -51,7 +51,7 @@ class HCAManager(object):
         mlnx_bdf_list = []
         raw_mlnx_bdf_list = data_source.exec_shell_cmd("lspci -Dd 15b3:")
         for member in raw_mlnx_bdf_list:
-            bdf = extract_string_by_regex(member, "(.+) (Ethernet|Infiniband)")
+            bdf = extract_string_by_regex(member, "(.+) (Ethernet|Infini[Bb]and)")
 
             if bdf != "=N/A=":
                 mlnx_bdf_list.append(bdf)
