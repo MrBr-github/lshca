@@ -22,10 +22,23 @@ import time
 # Link | State |   PCI addr   |  RDMA  | Numa | Rate | Parent addr |   Net   | PfVf | HCA Type
 # ---------------------------------------------------------------------------------------------
 #  IB  | actv  | 0000:03:00.0 | mlx5_2 |  0   |  56  |      -      | ib2 ib3 | PF   |  MT4113
+#
+#
+# 2. Failed to identify, or provide any output for CX2 HCA
+# #lspci | grep -i mella
+# 0a:00.0 InfiniBand: Mellanox Technologies MT26428 [ConnectX VPI PCIe 2.0 5GT/s - IB QDR / 10GigE] (rev a0)
+# root@dev-r-vrt-088 ~
+# #ofed_info -s
+# MLNX_OFED_LINUX-4.4-0.0.3.0:
+#
+#
+
+
 
 
 class Config(object):
     def __init__(self):
+        self.debug = False
         self.record_data_for_debug = False
         self.record_dir = None
         self.record_tar_file = None
@@ -125,7 +138,6 @@ class Output(object):
                         self.column_width[key] = len(data[key])
 
         self.separator_len = sum(self.column_width.values()) + len(self.column_width)*3 - 2
-
 
         for line in self.output:
             self.print_sub_header(line["sub_header"])
@@ -591,6 +603,8 @@ def parse_arguments():
         elif user_args[index] == "-v":
             print "lshca ver. " + config.ver
             sys.exit()
+        elif user_args[index] == "-d":
+            config.debug = True
         else:
             print "\n" + user_args[index] + " - Unknown parameter\n"
             usage()
@@ -602,6 +616,8 @@ def usage():
     print "Usage: lspci [-h] [-m normal|record]"
     print "-h, --help"
     print "  Show this help"
+    print "-d"
+    print "  run with debug outputs"
     print "-m <mode>"
     print "  Mode of operation"
     print "    normal - (default) list HCAs"
