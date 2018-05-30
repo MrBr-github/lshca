@@ -9,6 +9,20 @@ import sys
 import tarfile
 import time
 
+# TBD: Fix Issues
+#
+# 1. This script does not handles mlx4 devices well
+#    there is no consideration for cases where can be ports beside ( self.rdma + "/ports/1" )
+# - Dev#: 2
+# - Desc: Mellanox Technologies MT27600 [Connect-IB]
+# - PN: MCB194A-FCAT
+# - SN: MT1228X05404
+# - FW: 10.16.1200
+# ---------------------------------------------------------------------------------------------
+# Link | State |   PCI addr   |  RDMA  | Numa | Rate | Parent addr |   Net   | PfVf | HCA Type
+# ---------------------------------------------------------------------------------------------
+#  IB  | actv  | 0000:03:00.0 | mlx5_2 |  0   |  56  |      -      | ib2 ib3 | PF   |  MT4113
+
 
 class Config(object):
     def __init__(self):
@@ -96,7 +110,7 @@ class Output(object):
     def __init__(self):
         self.output = []
         self.column_width = {}
-        self.sub_header_separator_len = 0
+        self.separator_len = 0
 
     def append(self, data):
         self.output.append(data)
@@ -110,17 +124,20 @@ class Output(object):
                     elif len(data[key]) > self.column_width[key]:
                         self.column_width[key] = len(data[key])
 
+        self.separator_len = sum(self.column_width.values()) + len(self.column_width)*3 - 2
+
+
         for line in self.output:
             self.print_sub_header(line["sub_header"])
             self.print_data(line["data"])
 
     def print_sub_header(self, args):
         output = ""
+        new_line = ""
         for key in args:
-            output += " -- " + str(key) + ": " + str(args[key])
-        if self.sub_header_separator_len < (len(output) + 1):
-            self.sub_header_separator_len = (len(output) + 1)
-        separator = "-" * self.sub_header_separator_len
+            output += new_line + "- " + str(key) + ": " + str(args[key])
+            new_line = "\n"
+        separator = "-" * self.separator_len
         print separator
         print output
         print separator
@@ -132,7 +149,7 @@ class Output(object):
             output = ""
             separator = ""
             if count == 2:
-                print "-" * (sum(self.column_width.values()) + len(self.column_width)*3 - 2)
+                print "-" * self.separator_len
             for key in line:
                 output += separator + str("{:^{width}}".format(line[key], width=self.column_width[key]))
                 separator = " | "
@@ -235,16 +252,28 @@ class SYSFSDevice(object):
 
         self.state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/1/state")
         self.state = extract_string_by_regex(self.state, "[0-9:]+ (.*)", "").lower()
+        if self.state == "active":
+            self.state = "actv"
 
-        self.phys_state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/1/phys_state")
+        self.phys_state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                          "/ports/1/phys_state")
         self.phys_state = extract_string_by_regex(self.phys_state, "[0-9:]+ (.*)", "").lower()
 
-        self.link_layer = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/1/link_layer")
+        self.link_layer = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                          "/ports/1/link_layer")
         self.link_layer = self.link_layer.rstrip()
         if self.link_layer == "InfiniBand":
             self.link_layer = "IB"
         elif self.link_layer == "Ethernet":
             self.link_layer = "Eth"
+
+        self.fw = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/fw_ver")
+        self.fw = self.fw.rstrip()
+
+        self.port_rate = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/1/rate")
+        self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
+        if self.state == "down":
+            self.port_rate = self.port_rate + "*"
 
     def __repr__(self):
         delim = " "
@@ -283,6 +312,12 @@ class SYSFSDevice(object):
 
     def get_link_layer(self):
         return self.link_layer
+
+    def get_fw(self):
+        return self.fw
+
+    def get_port_rate(self):
+        return self.port_rate
 
 
 class MlnxBFDDevice(object):
@@ -340,6 +375,12 @@ class MlnxBFDDevice(object):
     def get_link_layer(self):
         return self.sysFSDevice.get_link_layer()
 
+    def get_fw(self):
+        return self.sysFSDevice.get_fw()
+
+    def get_port_rate(self):
+        return self.sysFSDevice.get_port_rate()
+
     def output_info(self):
         if self.get_pfvf() is "PF":
             pfvf = self.get_pfvf() + "  "
@@ -353,7 +394,7 @@ class MlnxBFDDevice(object):
                   "net": self.get_net(),
                   "hca_type": self.get_hca_type(),
                   "state": self.get_state(),
-                  "phys_state": self.get_phys_state(),
+                  "port_rate": self.get_port_rate(),
                   "link_layer": self.get_link_layer()}
         return output
 
@@ -367,7 +408,7 @@ class MlnxBFDDevice(object):
                   "net": "Net",
                   "hca_type": "HCA Type",
                   "state": "State",
-                  "phys_state": "Phys State",
+                  "port_rate": "Rate",
                   "link_layer": "Link"}
         return output
 
@@ -383,6 +424,7 @@ class MlnxHCA(object):
 
         self.sn = bfd_dev.get_sn()
         self.pn = bfd_dev.get_pn()
+        self.fw = bfd_dev.get_fw()
 
     def __repr__(self):
         output = ""
@@ -399,12 +441,16 @@ class MlnxHCA(object):
     def get_pn(self):
         return self.pn
 
+    def get_fw(self):
+        return self.fw
+
     def get_description(self):
         return self.bfd_devices[0].get_description()
 
     def output_info(self):
         output = {"hca_info": {"SN": self.get_sn(),
                                "PN": self.get_pn(),
+                               "FW": self.get_fw(),
                                "Desc": self.get_description()},
                   "bdf_devices": [],
                   "bdf_devices_headers": self.bfd_devices[0].output_headers()}
@@ -422,8 +468,7 @@ class DataSource(object):
             if not os.path.exists(config.record_dir):
                 os.makedirs(config.record_dir)
 
-            config.record_tar_file = config.record_dir + "/" + os.uname()[1] + "--" + \
-                                     str(time.time()) + ".tar"
+            config.record_tar_file = config.record_dir + "/" + os.uname()[1] + "--" + str(time.time()) + ".tar"
 
             print "\nlshca started data recording"
             print "output saved in " + config.record_tar_file + " file\n\n"
@@ -523,15 +568,12 @@ def find_in_list(list_to_search_in, regex_pattern):
         return ""
 
 
-
-
-
 def parse_arguments():
     user_args = sys.argv[1:]
 
     index = 0
     while index < len(user_args):
-        if user_args[index] == "-h":
+        if user_args[index] == "-h" or user_args[index] == "--help":
             usage()
         elif user_args[index] == "-m":
             index += 1
@@ -558,10 +600,12 @@ def parse_arguments():
 
 def usage():
     print "Usage: lspci [-h] [-m normal|record]"
-    print "-h   -  Show this help"
-    print "-m   -  Mode of operation"
-    print "     normal - (default) list HCAs"
-    print "     record - record all data for debug"
+    print "-h, --help"
+    print "  Show this help"
+    print "-m <mode>"
+    print "  Mode of operation"
+    print "    normal - (default) list HCAs"
+    print "    record - record all data for debug and lists HCAs"
     sys.exit()
 
 
