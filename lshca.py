@@ -34,8 +34,6 @@ import time
 #
 
 
-
-
 class Config(object):
     def __init__(self):
         self.debug = False
@@ -241,8 +239,9 @@ class PCIDevice(object):
 
 
 class SYSFSDevice(object):
-    def __init__(self, bdf, data_source):
+    def __init__(self, bdf, data_source, port=1):
         self.bdf = bdf
+        self.port = port
 
         sys_prefix = "/sys/bus/pci/devices/" + self.bdf
 
@@ -262,17 +261,18 @@ class SYSFSDevice(object):
         self.net = data_source.list_dir_if_exists(sys_prefix + "/net/").rstrip()
         self.hca_type = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/hca_type").rstrip()
 
-        self.state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/1/state")
+        self.state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
+                                                     str(self.port) + "/state")
         self.state = extract_string_by_regex(self.state, "[0-9:]+ (.*)", "").lower()
         if self.state == "active":
             self.state = "actv"
 
         self.phys_state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                          "/ports/1/phys_state")
+                                                          "/ports/" + str(self.port) + "/phys_state")
         self.phys_state = extract_string_by_regex(self.phys_state, "[0-9:]+ (.*)", "").lower()
 
         self.link_layer = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                          "/ports/1/link_layer")
+                                                          "/ports/" + str(self.port) + "/link_layer")
         self.link_layer = self.link_layer.rstrip()
         if self.link_layer == "InfiniBand":
             self.link_layer = "IB"
@@ -282,7 +282,8 @@ class SYSFSDevice(object):
         self.fw = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/fw_ver")
         self.fw = self.fw.rstrip()
 
-        self.port_rate = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/1/rate")
+        self.port_rate = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
+                                                         str(self.port) + "/rate")
         self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
         if self.state == "down":
             self.port_rate = self.port_rate + "*"
