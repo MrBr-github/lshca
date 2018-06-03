@@ -11,18 +11,6 @@ import time
 
 # TBD: Fix Issues
 #
-# 1. This script does not handles mlx4 devices well
-#    there is no consideration for cases where can be ports beside ( self.rdma + "/ports/1" )
-# - Dev#: 2
-# - Desc: Mellanox Technologies MT27600 [Connect-IB]
-# - PN: MCB194A-FCAT
-# - SN: MT1228X05404
-# - FW: 10.16.1200
-# ---------------------------------------------------------------------------------------------
-# Link | State |   PCI addr   |  RDMA  | Numa | Rate | Parent addr |   Net   | PfVf | HCA Type
-# ---------------------------------------------------------------------------------------------
-#  IB  | actv  | 0000:03:00.0 | mlx5_2 |  0   |  56  |      -      | ib2 ib3 | PF   |  MT4113
-#
 
 
 class Config(object):
@@ -47,8 +35,16 @@ class HCAManager(object):
 
         mlnx_bdf_devices = []
         for bdf in mlnx_bdf_list:
-            bdf_dev = MlnxBFDDevice(bdf, data_source)
-            mlnx_bdf_devices.append(bdf_dev)
+            port_count = 1
+
+            while True:
+                bdf_dev = MlnxBFDDevice(bdf, data_source, port_count)
+                mlnx_bdf_devices.append(bdf_dev)
+
+                if port_count >= len(bdf_dev.get_port_list()):
+                    break
+
+                port_count += 1
 
         self.mlnxHCAs = []
         # First handle all PFs
@@ -249,7 +245,20 @@ class SYSFSDevice(object):
             print >> sys.stderr, "Warning: " + self.bdf + " has no NUMA assignment"
 
         self.rdma = data_source.list_dir_if_exists(sys_prefix + "/infiniband/").rstrip()
-        self.net = data_source.list_dir_if_exists(sys_prefix + "/net/").rstrip()
+        net_list = data_source.list_dir_if_exists(sys_prefix + "/net/")
+
+        self.net = ""
+        for net in net_list.split(" "):
+            net_port = data_source.read_file_if_exists(sys_prefix + "/net/" + net + "/dev_id")
+            try:
+                net_port = int(net_port, 16) + 1
+            except ValueError:
+                net_port = ""
+
+            if net_port == self.port:
+                self.net = net
+                break
+
         self.hca_type = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/hca_type").rstrip()
 
         self.state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
@@ -278,6 +287,9 @@ class SYSFSDevice(object):
         self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
         if self.state == "down":
             self.port_rate = self.port_rate + "*"
+
+        self.port_list = data_source.list_dir_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/").rstrip()
+        self.port_list = self.port_list.split(" ")
 
     def __repr__(self):
         delim = " "
@@ -323,11 +335,17 @@ class SYSFSDevice(object):
     def get_port_rate(self):
         return self.port_rate
 
+    def get_port_list(self):
+        return self.port_list
+
+    def get_port(self):
+        return str(self.port)
+
 
 class MlnxBFDDevice(object):
-    def __init__(self, bdf, data_source):
+    def __init__(self, bdf, data_source, port=1):
         self.bdf = bdf
-        self.sysFSDevice = SYSFSDevice(self.bdf, data_source)
+        self.sysFSDevice = SYSFSDevice(self.bdf, data_source, port)
         self.pciDevice = PCIDevice(self.bdf, data_source)
         self.slaveBDFDevices = []
 
@@ -385,6 +403,12 @@ class MlnxBFDDevice(object):
     def get_port_rate(self):
         return self.sysFSDevice.get_port_rate()
 
+    def get_port_list(self):
+        return self.sysFSDevice.get_port_list()
+
+    def get_port(self):
+        return self.sysFSDevice.get_port()
+
     def output_info(self):
         if self.get_sriov() is "PF":
             sriov = self.get_sriov() + "  "
@@ -399,6 +423,7 @@ class MlnxBFDDevice(object):
                   "hca_type": self.get_hca_type(),
                   "state": self.get_state(),
                   "port_rate": self.get_port_rate(),
+                  "port": self.get_port(),
                   "link_layer": self.get_link_layer()}
         return output
 
@@ -413,6 +438,7 @@ class MlnxBFDDevice(object):
                   "hca_type": "HCA Type",
                   "state": "State",
                   "port_rate": "Rate",
+                  "port": "Port",
                   "link_layer": "Link"}
         return output
 
