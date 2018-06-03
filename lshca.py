@@ -23,15 +23,6 @@ import time
 # ---------------------------------------------------------------------------------------------
 #  IB  | actv  | 0000:03:00.0 | mlx5_2 |  0   |  56  |      -      | ib2 ib3 | PF   |  MT4113
 #
-#
-# 2. Failed to identify, or provide any output for CX2 HCA
-# #lspci | grep -i mella
-# 0a:00.0 InfiniBand: Mellanox Technologies MT26428 [ConnectX VPI PCIe 2.0 5GT/s - IB QDR / 10GigE] (rev a0)
-# root@dev-r-vrt-088 ~
-# #ofed_info -s
-# MLNX_OFED_LINUX-4.4-0.0.3.0:
-#
-#
 
 
 class Config(object):
@@ -161,7 +152,7 @@ class Output(object):
             if count == 2:
                 print "-" * self.separator_len
             for key in line:
-                output += separator + str("{:^{width}}".format(line[key], width=self.column_width[key]))
+                output += separator + str("{0:^{width}}".format(line[key], width=self.column_width[key]))
                 separator = " | "
             print output
 
