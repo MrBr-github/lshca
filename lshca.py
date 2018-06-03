@@ -53,7 +53,7 @@ class HCAManager(object):
         self.mlnxHCAs = []
         # First handle all PFs
         for bdf_dev in mlnx_bdf_devices:
-            if bdf_dev.get_pfvf() == "PF":
+            if bdf_dev.get_sriov() == "PF":
                 hca_found = False
                 for hca in self.mlnxHCAs:
                     if bdf_dev.get_sn() == hca.get_sn():
@@ -66,7 +66,7 @@ class HCAManager(object):
 
         # Now handle all VFs
         for bdf_dev in mlnx_bdf_devices:
-            if bdf_dev.get_pfvf() == 'VF':
+            if bdf_dev.get_sriov() == 'VF':
                 vf_parent_bdf = bdf_dev.get_vf_parent()
 
                 # TBD: refactor to function
@@ -238,10 +238,10 @@ class SYSFSDevice(object):
 
         vf_parent_file = data_source.read_link_if_exists(sys_prefix + "/physfn")
         if vf_parent_file is not "":
-            self.pfvf = "VF"
+            self.sriov = "VF"
             self.vfParent = extract_string_by_regex(vf_parent_file, ".*\/([0-9].*)")
         else:
-            self.pfvf = "PF"
+            self.sriov = "PF"
             self.vfParent = "-"
 
         self.numa = data_source.read_file_if_exists(sys_prefix + "/numa_node").rstrip()
@@ -283,15 +283,15 @@ class SYSFSDevice(object):
         delim = " "
         return "SYS device:" + delim +\
                self.get_bdf() + delim + \
-               self.get_pfvf() + delim + \
+               self.get_sriov() + delim + \
                self.get_vf_parent() + delim + \
                self.get_numa()
 
     def get_bdf(self):
         return self.bdf
 
-    def get_pfvf(self):
-        return self.pfvf
+    def get_sriov(self):
+        return self.sriov
 
     def get_vf_parent(self):
         return self.vfParent
@@ -352,8 +352,8 @@ class MlnxBFDDevice(object):
     def get_description(self):
         return self.pciDevice.get_description()
 
-    def get_pfvf(self):
-        return self.sysFSDevice.get_pfvf()
+    def get_sriov(self):
+        return self.sysFSDevice.get_sriov()
 
     def get_vf_parent(self):
         return self.sysFSDevice.vfParent
@@ -386,11 +386,11 @@ class MlnxBFDDevice(object):
         return self.sysFSDevice.get_port_rate()
 
     def output_info(self):
-        if self.get_pfvf() is "PF":
-            pfvf = self.get_pfvf() + "  "
+        if self.get_sriov() is "PF":
+            sriov = self.get_sriov() + "  "
         else:
-            pfvf = "  " + self.get_pfvf()
-        output = {"pfvf": pfvf,
+            sriov = "  " + self.get_sriov()
+        output = {"sriov": sriov,
                   "numa": self.get_numa(),
                   "bdf": self.get_bdf(),
                   "vf_parent": self.get_vf_parent(),
@@ -404,7 +404,7 @@ class MlnxBFDDevice(object):
 
     @staticmethod
     def output_headers():
-        output = {"pfvf": "PfVf",
+        output = {"sriov": "SRIOV",
                   "numa": "Numa",
                   "bdf": "PCI addr",
                   "vf_parent": "Parent addr",
@@ -421,7 +421,7 @@ class MlnxHCA(object):
     def __init__(self, bfd_dev):
         self.bfd_devices = []
 
-        if bfd_dev.get_pfvf() == "PF":
+        if bfd_dev.get_sriov() == "PF":
             self.bfd_devices.append(bfd_dev)
         else:
             raise ValueError("MlnxHCA object can be initialised ONLY with PF bfdDev")
