@@ -9,13 +9,35 @@ import sys
 import tarfile
 import time
 
+# TBD: add features
+#
+# 2. provide cmd option for custom output
+#
+#
 # TBD: Fix Issues
+# 1. fix separator line length in case of reduced output fields number
+# -----------------------------------------------------------------------------------------------
+# - Dev#: 1
+# - Desc: Mellanox Technologies MT28800 Family [ConnectX-5 Ex]
+# - PN: MCX556A-EDAT
+# - SN: MT1703X00851
+# - FW:
+# -----------------------------------------------------------------------------------------------
+#   PCI addr   | RDMA | Net | Port | Numa | State | Link
+# -----------------------------------------------------------------------------------------------
+# 0002:01:00.0 |      |     |  1   |  8   |       |
+# 0002:01:00.1 |      |     |  1   |  8   |       |
+# -----------------------------------------------------------------------------------------------
 #
 
 
 class Config(object):
     def __init__(self):
         self.debug = False
+
+        self.output_order = ["bdf", "rdma", "net", "port", "numa", "state", "link_layer",
+                             "port_rate", "sriov","vf_parent", "hca_type"]
+
         self.record_data_for_debug = False
         self.record_dir = None
         self.record_tar_file = None
@@ -104,7 +126,6 @@ class HCAManager(object):
 
 
 class Output(object):
-    # TBD header separator width might change if first line are shorter then following one
     def __init__(self):
         self.output = []
         self.column_width = {}
@@ -141,21 +162,33 @@ class Output(object):
 
     def print_data(self, args):
         count = 1
+        order_dict = {}
+
+        position = 0
+        for key in config.output_order:
+            order_dict[key] = position
+            position += 1
 
         for line in args:
-            output = ""
-            separator = ""
             if count == 2:
                 print "-" * self.separator_len
+
+            output_list = [""] * len(order_dict)
             for key in line:
-                output += separator + str("{0:^{width}}".format(line[key], width=self.column_width[key]))
-                separator = " | "
-            print output
+                if key in order_dict:
+                    output_list = output_list[0:order_dict[key]] + \
+                                   [str("{0:^{width}}".format(line[key], width=self.column_width[key]))] + \
+                                   output_list[order_dict[key] + 1:]
+
+                if key in order_dict:
+                    pass
 
             count += 1
+            print ' | '.join(output_list)
 
 
 class LspciSource(object):
+                # print key + str(order_dict[key])
     def __init__(self):
         self.record_cmd_output = False
 
