@@ -9,34 +9,13 @@ import sys
 import tarfile
 import time
 
-# TBD: add features
-#
-# 2. provide cmd option for custom output
-#
-#
-# TBD: Fix Issues
-# 1. fix separator line length in case of reduced output fields number
-# -----------------------------------------------------------------------------------------------
-# - Dev#: 1
-# - Desc: Mellanox Technologies MT28800 Family [ConnectX-5 Ex]
-# - PN: MCX556A-EDAT
-# - SN: MT1703X00851
-# - FW:
-# -----------------------------------------------------------------------------------------------
-#   PCI addr   | RDMA | Net | Port | Numa | State | Link
-# -----------------------------------------------------------------------------------------------
-# 0002:01:00.0 |      |     |  1   |  8   |       |
-# 0002:01:00.1 |      |     |  1   |  8   |       |
-# -----------------------------------------------------------------------------------------------
-#
-
 
 class Config(object):
     def __init__(self):
         self.debug = False
 
         self.output_order = ["bdf", "rdma", "net", "port", "numa", "state", "link_layer",
-                             "port_rate", "sriov","vf_parent", "hca_type"]
+                             "port_rate", "sriov", "vf_parent", "hca_type"]
 
         self.record_data_for_debug = False
         self.record_dir = None
