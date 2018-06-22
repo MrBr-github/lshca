@@ -21,7 +21,7 @@ class Config(object):
         self.record_dir = None
         self.record_tar_file = None
 
-        self.ver = "0.2"
+        self.ver = "2.2"
 
 
 class HCAManager(object):
