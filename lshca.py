@@ -166,40 +166,6 @@ class Output(object):
             print ' | '.join(output_list)
 
 
-class LspciSource(object):
-                # print key + str(order_dict[key])
-    def __init__(self):
-        self.record_cmd_output = False
-
-    def record_lspci_cmd_out(self, cmd):
-        # TBD record cmd output to file called as cmd
-        # do this as
-        pass
-
-    def get_mlnx_eth_devices_bfd(self):
-        # PCI vendor 15b3 == Mellanox
-        # PCI class 0200 == Ethernet devices , 0207 == Infiniband devices
-        data = exec_shell_cmd("lspci -nDd 15b3::0200 | awk '{print $1}'")
-
-        # TBD: if self.record is True
-
-        return data
-
-    def get_mlnx_ib_devices_bfd(self):
-        # PCI vendor 15b3 == Mellanox
-        # PCI class 0200 == Ethernet devices , 0207 == Infiniband devices
-        data = exec_shell_cmd("lspci -nDd 15b3::0207 | awk '{print $1}'")
-
-        # TBD: if self.record is True
-
-        return data
-
-
-class LspciMockup(object):
-    def __init__(self):
-        pass
-
-
 class PCIDevice(object):
     def __init__(self, bdf, data_source):
         self.bdf = bdf
