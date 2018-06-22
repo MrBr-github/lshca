@@ -18,7 +18,7 @@ class Config(object):
                              "port_rate", "sriov", "vf_parent", "hca_type"]
 
         self.record_data_for_debug = False
-        self.record_dir = None
+        self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
         self.ver = "2.2"
@@ -470,9 +470,6 @@ class MlnxHCA(object):
 class DataSource(object):
     def __init__(self):
         if config.record_data_for_debug is True:
-            if config.record_dir is None:
-                config.record_dir = "/tmp/lshca"
-
             if not os.path.exists(config.record_dir):
                 os.makedirs(config.record_dir)
 
