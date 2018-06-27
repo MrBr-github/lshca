@@ -615,6 +615,8 @@ def usage():
     print "  Mode of operation"
     print "    normal - (default) list HCAs"
     print "    record - record all data for debug and lists HCAs"
+    print "-v"
+    print "  show version"
     sys.exit()
 
 
