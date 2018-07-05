@@ -440,8 +440,13 @@ class MlnxHCA(object):
             output = output + str(bfd_dev)
         return output
 
-    def add_bdf_dev(self, bfd_dev):
-        self.bfd_devices.append(bfd_dev)
+    def add_bdf_dev(self, new_bfd_dev):
+        if new_bfd_dev.get_sriov() == "VF" and new_bfd_dev.get_vf_parent() != "-":
+            for i, bfd_dev in enumerate(self.bfd_devices):
+                if bfd_dev.get_bdf() == new_bfd_dev.get_vf_parent():
+                    self.bfd_devices.insert(i+1, new_bfd_dev)
+        else:
+            self.bfd_devices.append(new_bfd_dev)
 
     def get_sn(self):
         return self.sn
