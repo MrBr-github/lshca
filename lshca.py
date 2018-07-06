@@ -50,7 +50,7 @@ class HCAManager(object):
         self.mlnxHCAs = []
         # First handle all PFs
         for bdf_dev in mlnx_bdf_devices:
-            if bdf_dev.get_sriov() == "PF":
+            if bdf_dev.get_sriov() in ("PF", "PF*"):
                 hca_found = False
                 for hca in self.mlnxHCAs:
                     if bdf_dev.get_sn() == hca.get_sn():
@@ -349,7 +349,11 @@ class MlnxBFDDevice(object):
         return self.pciDevice.get_description()
 
     def get_sriov(self):
-        return self.sysFSDevice.get_sriov()
+        if self.sysFSDevice.get_sriov() == "PF" and \
+                re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.get_description()):
+            return self.sysFSDevice.get_sriov() + "*"
+        else:
+            return self.sysFSDevice.get_sriov()
 
     def get_vf_parent(self):
         return self.sysFSDevice.vfParent
@@ -388,7 +392,7 @@ class MlnxBFDDevice(object):
         return self.sysFSDevice.get_port()
 
     def output_info(self):
-        if self.get_sriov() is "PF":
+        if self.get_sriov() in ("PF", "PF*"):
             sriov = self.get_sriov() + "  "
         else:
             sriov = "  " + self.get_sriov()
@@ -425,7 +429,7 @@ class MlnxHCA(object):
     def __init__(self, bfd_dev):
         self.bfd_devices = []
 
-        if bfd_dev.get_sriov() == "PF":
+        if bfd_dev.get_sriov() in ("PF", "PF*"):
             self.bfd_devices.append(bfd_dev)
         else:
             raise ValueError("MlnxHCA object can be initialised ONLY with PF bfdDev")
