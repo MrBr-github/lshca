@@ -14,8 +14,8 @@ class Config(object):
     def __init__(self):
         self.debug = False
 
-        self.output_order = ["bdf", "rdma", "net", "port", "numa", "state", "link_layer",
-                             "port_rate", "sriov", "vf_parent", "hca_type"]
+        self.output_order = ["bdf", "rdma", "net", "port", "numa", "state", "link_layer", "port_rate",
+                             "sriov", "vf_parent", "hca_type"]
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
@@ -114,15 +114,27 @@ class Output(object):
         self.output.append(data)
 
     def print_output(self):
+        header_line_width = 0
+
         for line in self.output:
             for data in line["data"]:
                 for key in data:
-                    if key not in self.column_width:
-                        self.column_width[key] = len(data[key])
-                    elif len(data[key]) > self.column_width[key]:
-                        self.column_width[key] = len(data[key])
+                    if key in config.output_order:
+                        if key not in self.column_width:
+                            self.column_width[key] = len(data[key])
+                        elif len(data[key]) > self.column_width[key]:
+                            self.column_width[key] = len(data[key])
+            for key in line["sub_header"]:
+                current_width = len(key) + len(str(line["sub_header"][key])) + 5
+                if header_line_width < current_width :
+                    header_line_width = current_width
 
-        self.separator_len = sum(self.column_width.values()) + len(self.column_width)*3 - 2
+        data_line_width = sum(self.column_width.values()) + len(self.column_width)*3 - 2
+
+        if data_line_width > header_line_width :
+            self.separator_len = data_line_width
+        else:
+            self.separator_len = header_line_width
 
         for line in self.output:
             self.print_sub_header(line["sub_header"])
