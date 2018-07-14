@@ -23,6 +23,8 @@ class Config(object):
 
         self.ver = "2.2"
 
+        self.mst_device_enabled = False
+
 
 class HCAManager(object):
     def __init__(self, data_source):
@@ -126,12 +128,12 @@ class Output(object):
                             self.column_width[key] = len(data[key])
             for key in line["sub_header"]:
                 current_width = len(key) + len(str(line["sub_header"][key])) + 5
-                if header_line_width < current_width :
+                if header_line_width < current_width:
                     header_line_width = current_width
 
         data_line_width = sum(self.column_width.values()) + len(self.column_width)*3 - 2
 
-        if data_line_width > header_line_width :
+        if data_line_width > header_line_width:
             self.separator_len = data_line_width
         else:
             self.separator_len = header_line_width
@@ -176,6 +178,62 @@ class Output(object):
 
             count += 1
             print ' | '.join(output_list)
+
+
+class MSTDevice(object):
+    def __init__(self):
+        self.mst_raw_data = "No MST data"
+        self.bdf_short_format = True
+        self.got_raw_data = False
+
+    def __repr__(self):
+        return self.mst_raw_data
+
+    def get_raw_data(self, data_source):
+        if self.got_raw_data:
+            return
+
+        mst_init_running = False
+
+        if config.mst_device_enabled:
+            config.output_order.append("mst_dev")
+
+            result = data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?")
+            if result == ["0"]:
+                mst_installed = True
+            else:
+                mst_installed = False
+
+            if mst_installed:
+                result = data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'")
+                if result != ["0"]:
+                    mst_init_running = True
+
+                if not mst_init_running:
+                    data_source.exec_shell_cmd("mst start")
+
+                self.mst_raw_data = data_source.exec_shell_cmd("mst status -v")
+                self.got_raw_data = True
+
+                if not mst_init_running:
+                    data_source.exec_shell_cmd("mst stop")
+
+                lspci_raw_data = data_source.exec_shell_cmd("lspci -D")
+                for line in lspci_raw_data:
+                    pci_domain = extract_string_by_regex(line, "([0-9]{4}):.*")
+                    if pci_domain != "0000":
+                        self.bdf_short_format = False
+
+    def get_mst_device(self, bdf):
+        if self.bdf_short_format:
+            bdf = extract_string_by_regex(bdf, "[0-9]{4}:(.*)")
+
+        for line in self.mst_raw_data:
+            data_line = extract_string_by_regex(line, "(.*" + bdf + ".*)")
+            if data_line != "=N/A=":
+                mst_device = extract_string_by_regex(data_line, ".* (/dev/mst/[^\s]+) .*")
+                return mst_device
+        return ""
 
 
 class PCIDevice(object):
@@ -337,10 +395,13 @@ class MlnxBFDDevice(object):
         self.bdf = bdf
         self.sysFSDevice = SYSFSDevice(self.bdf, data_source, port)
         self.pciDevice = PCIDevice(self.bdf, data_source)
+        self.mstDevice = gMstDevice
+        self.mstDevice.get_raw_data(data_source)
         self.slaveBDFDevices = []
 
     def __repr__(self):
-        return self.sysFSDevice.__repr__() + "\n" + self.pciDevice.__repr__() + "\n"
+        return self.sysFSDevice.__repr__() + "\n" + self.pciDevice.__repr__() + "\n" + \
+                self.mstDevice.__repr__() + "\n"
 
     def add_slave_bdf_device(self, slave_bdf_device):
         self.slaveBDFDevices.append(slave_bdf_device)
@@ -403,6 +464,9 @@ class MlnxBFDDevice(object):
     def get_port(self):
         return self.sysFSDevice.get_port()
 
+    def get_mst_dev(self):
+        return self.mstDevice.get_mst_device(self.bdf)
+
     def output_info(self):
         if self.get_sriov() in ("PF", "PF*"):
             sriov = self.get_sriov() + "  "
@@ -418,7 +482,8 @@ class MlnxBFDDevice(object):
                   "state": self.get_state(),
                   "port_rate": self.get_port_rate(),
                   "port": self.get_port(),
-                  "link_layer": self.get_link_layer()}
+                  "link_layer": self.get_link_layer(),
+                  "mst_dev": self.get_mst_dev()}
         return output
 
     @staticmethod
@@ -433,7 +498,8 @@ class MlnxBFDDevice(object):
                   "state": "State",
                   "port_rate": "Rate",
                   "port": "Port",
-                  "link_layer": "Link"}
+                  "link_layer": "Link",
+                  "mst_dev": "MST device"}
         return output
 
 
@@ -619,6 +685,14 @@ def parse_arguments():
             sys.exit()
         elif user_args[index] == "-d":
             config.debug = True
+        elif user_args[index] == "-s":
+            index += 1
+            if index > len(user_args):
+                print "\n-s requires parameter\n"
+                usage()
+
+            if user_args[index] == "mst":
+                config.mst_device_enabled = True
         else:
             print "\n" + user_args[index] + " - Unknown parameter\n"
             usage()
@@ -627,7 +701,7 @@ def parse_arguments():
 
 
 def usage():
-    print "Usage: lspci [-h] [-m normal|record]"
+    print "Usage: lshca [-hdv] [-m <mode>] [-s <data source>]"
     print "-h, --help"
     print "  Show this help"
     print "-d"
@@ -636,12 +710,19 @@ def usage():
     print "  Mode of operation"
     print "    normal - (default) list HCAs"
     print "    record - record all data for debug and lists HCAs"
+    print "-s <mst>"
+    print "  Add optional data sources."
+    print "  Always on data sources are:"
+    print "    sysfs, lspci"
+    print "  Optional data sources:"
+    print "    mst - provides MST based info. This data source slows execution"
     print "-v"
     print "  show version"
     sys.exit()
 
 
 config = Config()
+gMstDevice = MSTDevice()
 
 
 def main():
