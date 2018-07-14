@@ -21,7 +21,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "2.2"
+        self.ver = "2.3"
 
 
 class HCAManager(object):
