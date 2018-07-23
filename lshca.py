@@ -297,11 +297,28 @@ class SYSFSDevice(object):
 
         self.net = ""
         for net in net_list.split(" "):
-            net_port = data_source.read_file_if_exists(sys_prefix + "/net/" + net + "/dev_id")
+            # the below code tries to identify which of the files has valid port number dev_id or dev_port
+            # in mlx4 dev_port has the valid value, in mlx5 - dev_id
+            # this solution mimics one in ibdev2netdev
+
+            net_port_dev_id = data_source.read_file_if_exists(sys_prefix + "/net/" + net + "/dev_id")
             try:
-                net_port = int(net_port, 16) + 1
+                net_port_dev_id = int(net_port_dev_id, 16)
             except ValueError:
-                net_port = ""
+                net_port_dev_id = 0
+
+            net_port_dev_port = data_source.read_file_if_exists(sys_prefix + "/net/" + net + "/dev_port")
+            try:
+                net_port_dev_port = int(net_port_dev_port)
+            except ValueError:
+                net_port_dev_port = 0
+
+            if net_port_dev_id > net_port_dev_port:
+                net_port = net_port_dev_id
+            else:
+                net_port = net_port_dev_port
+
+            net_port += 1
 
             if net_port == self.port:
                 self.net = net
