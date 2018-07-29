@@ -710,6 +710,9 @@ def parse_arguments():
 
             if user_args[index] == "mst":
                 config.mst_device_enabled = True
+            else:
+                print "\n" + user_args[index] + " - Unknown parameter for -s\n"
+                usage()
         else:
             print "\n" + user_args[index] + " - Unknown parameter\n"
             usage()
