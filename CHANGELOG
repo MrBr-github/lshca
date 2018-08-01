@@ -1,6 +1,0 @@
-Ver. 2.4
-    - Fixed bug: port identification via dev_id and dev_port (issue #13)
-    - Minor bugs: issue #15
-Ver. 2.3
-    - Feature: added MST info source
-    This brought python version of lshca to same functionality as bash version
