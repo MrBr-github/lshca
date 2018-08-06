@@ -15,7 +15,7 @@ class Config(object):
         self.debug = False
 
         self.output_order = ["bdf", "rdma", "net", "port", "numa", "state", "link_layer", "port_rate",
-                             "sriov", "vf_parent", "hca_type"]
+                             "sriov", "vf_parent", "LnkCapWidth", "LnkStaWidth", "hca_type"]
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
@@ -246,6 +246,8 @@ class PCIDevice(object):
         self.description = self.get_info_from_lspci_data("^[0-9].*", str(self.bdf) + ".*:(.+)")
         self.sn = self.get_info_from_lspci_data("\[SN\].*", ".*:(.+)")
         self.pn = self.get_info_from_lspci_data("\[PN\].*", ".*:(.+)")
+        self.lnkCapWidth = self.get_info_from_lspci_data("LnkCap:.*Width.*", ".*Width (x[0-9]+)")
+        self.lnkStaWidth = self.get_info_from_lspci_data("LnkSta:.*Width.*", ".*Width (x[0-9]+)")
 
     def __repr__(self):
         delim = " "
@@ -266,6 +268,12 @@ class PCIDevice(object):
 
     def get_description(self):
         return self.description
+
+    def get_lnk_cap_width(self):
+        return self.lnkCapWidth
+
+    def get_lnk_sta_width(self):
+        return self.lnkStaWidth
 
     def get_info_from_lspci_data(self, search_regex, output_regex):
         search_result = find_in_list(self.data, search_regex)
@@ -438,6 +446,12 @@ class MlnxBFDDevice(object):
     def get_description(self):
         return self.pciDevice.get_description()
 
+    def get_lnk_cap_width(self):
+        return self.pciDevice.get_lnk_cap_width()
+
+    def get_lnk_sta_width(self):
+        return self.pciDevice.get_lnk_sta_width()
+
     def get_sriov(self):
         if self.sysFSDevice.get_sriov() == "PF" and \
                 re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.get_description()):
@@ -500,7 +514,9 @@ class MlnxBFDDevice(object):
                   "port_rate": self.get_port_rate(),
                   "port": self.get_port(),
                   "link_layer": self.get_link_layer(),
-                  "mst_dev": self.get_mst_dev()}
+                  "mst_dev": self.get_mst_dev(),
+                  "LnkCapWidth": self.get_lnk_cap_width(),
+                  "LnkStaWidth": self.get_lnk_sta_width()}
         return output
 
     @staticmethod
@@ -516,7 +532,9 @@ class MlnxBFDDevice(object):
                   "port_rate": "Rate",
                   "port": "Port",
                   "link_layer": "Link",
-                  "mst_dev": "MST device"}
+                  "mst_dev": "MST device",
+                  "LnkCapWidth": "LnkCapW",
+                  "LnkStaWidth": "LnkStaW"}
         return output
 
 
