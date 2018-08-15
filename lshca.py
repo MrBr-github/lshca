@@ -29,6 +29,7 @@ class Config(object):
 class HCAManager(object):
     def __init__(self, data_source):
         mlnx_bdf_list = []
+        # Same lspci cmd used in MST source in order to benefit from cache
         raw_mlnx_bdf_list = data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
         for member in raw_mlnx_bdf_list:
             bdf = extract_string_by_regex(member, "(.+) (Ethernet|Infini[Bb]and|Network)")
@@ -181,59 +182,59 @@ class Output(object):
 
 
 class MSTDevice(object):
-    def __init__(self):
+    def __init__(self, bdf, data_source):
+        self.bdf = bdf
+        self.mst_device = ""
         self.mst_raw_data = "No MST data"
         self.bdf_short_format = True
-        self.got_raw_data = False
-
-    def __repr__(self):
-        return self.mst_raw_data
-
-    def get_raw_data(self, data_source):
-        if self.got_raw_data:
-            return
-
         mst_init_running = False
 
         if config.mst_device_enabled:
-            config.output_order.append("mst_dev")
+            if "mst_dev" not in config.output_order:
+                config.output_order.append("mst_dev")
 
-            result = data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?")
+            result = data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
             if result == ["0"]:
                 mst_installed = True
             else:
                 mst_installed = False
 
             if mst_installed:
-                result = data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'")
+                result = data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'",
+                                                    use_cache=True)
                 if result != ["0"]:
                     mst_init_running = True
 
                 if not mst_init_running:
-                    data_source.exec_shell_cmd("mst start")
+                    data_source.exec_shell_cmd("mst start", use_cache=True)
 
-                self.mst_raw_data = data_source.exec_shell_cmd("mst status -v")
+                self.mst_raw_data = data_source.exec_shell_cmd("mst status -v", use_cache=True)
                 self.got_raw_data = True
 
                 if not mst_init_running:
-                    data_source.exec_shell_cmd("mst stop")
+                    data_source.exec_shell_cmd("mst stop", use_cache=True)
 
-                lspci_raw_data = data_source.exec_shell_cmd("lspci -D")
+                # Same lspci cmd used in HCAManager in order to benefit from cache
+                lspci_raw_data = data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
                 for line in lspci_raw_data:
                     pci_domain = extract_string_by_regex(line, "([0-9]{4}):.*")
                     if pci_domain != "0000":
                         self.bdf_short_format = False
 
-    def get_mst_device(self, bdf):
-        if self.bdf_short_format:
-            bdf = extract_string_by_regex(bdf, "[0-9]{4}:(.*)")
+                if self.bdf_short_format:
+                    self.bdf = extract_string_by_regex(self.bdf, "[0-9]{4}:(.*)")
 
-        for line in self.mst_raw_data:
-            data_line = extract_string_by_regex(line, "(.*" + bdf + ".*)")
-            if data_line != "=N/A=":
-                mst_device = extract_string_by_regex(data_line, ".* (/dev/mst/[^\s]+) .*")
-                return mst_device
-        return ""
+                for line in self.mst_raw_data:
+                    data_line = extract_string_by_regex(line, "(.*" + self.bdf + ".*)")
+                    if data_line != "=N/A=":
+                        mst_device = extract_string_by_regex(data_line, ".* (/dev/mst/[^\s]+) .*")
+                        self.mst_device = mst_device
+
+    def __repr__(self):
+        return self.mst_raw_data
+
+    def get_mst_device(self):
+        return self.mst_device
 
 
 class PCIDevice(object):
@@ -420,8 +421,7 @@ class MlnxBFDDevice(object):
         self.bdf = bdf
         self.sysFSDevice = SYSFSDevice(self.bdf, data_source, port)
         self.pciDevice = PCIDevice(self.bdf, data_source)
-        self.mstDevice = gMstDevice
-        self.mstDevice.get_raw_data(data_source)
+        self.mstDevice = MSTDevice(self.bdf, data_source)
         self.slaveBDFDevices = []
 
     def __repr__(self):
@@ -496,7 +496,7 @@ class MlnxBFDDevice(object):
         return self.sysFSDevice.get_port()
 
     def get_mst_dev(self):
-        return self.mstDevice.get_mst_device(self.bdf)
+        return self.mstDevice.get_mst_device()
 
     def output_info(self):
         if self.get_sriov() in ("PF", "PF*"):
@@ -770,7 +770,6 @@ def usage():
 
 
 config = Config()
-gMstDevice = MSTDevice()
 
 
 def main():
