@@ -29,7 +29,7 @@ class Config(object):
 class HCAManager(object):
     def __init__(self, data_source):
         mlnx_bdf_list = []
-        raw_mlnx_bdf_list = data_source.exec_shell_cmd("lspci -Dd 15b3:")
+        raw_mlnx_bdf_list = data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
         for member in raw_mlnx_bdf_list:
             bdf = extract_string_by_regex(member, "(.+) (Ethernet|Infini[Bb]and|Network)")
 
@@ -240,7 +240,7 @@ class PCIDevice(object):
     def __init__(self, bdf, data_source):
         self.bdf = bdf
         self.bdWithoutF = self.bdf.split(".", 1)[0]
-        self.data = data_source.exec_shell_cmd("lspci -vvvD -s" + bdf)
+        self.data = data_source.exec_shell_cmd("lspci -vvvD -s" + bdf, use_cache=True)
         # Handling following string, taking reset of string after HCA type
         # 0000:01:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
         self.description = self.get_info_from_lspci_data("^[0-9].*", str(self.bdf) + ".*:(.+)")
@@ -591,6 +591,7 @@ class MlnxHCA(object):
 
 class DataSource(object):
     def __init__(self):
+        self.cache = {}
         if config.record_data_for_debug is True:
             if not os.path.exists(config.record_dir):
                 os.makedirs(config.record_dir)
@@ -600,9 +601,18 @@ class DataSource(object):
             print "\nlshca started data recording"
             print "output saved in " + config.record_tar_file + " file\n\n"
 
-    def exec_shell_cmd(self, cmd):
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
-        output, error = process.communicate()
+    def exec_shell_cmd(self, cmd, use_cache=False):
+        cache_key = self.cmd_to_str(cmd)
+
+        if use_cache is True and cache_key in self.cache:
+            output = self.cache[cache_key]
+
+        else:
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+            output, error = process.communicate()
+            if use_cache is True:
+                self.cache.update({cache_key: output})
+
         output = output.splitlines()
         if config.record_data_for_debug is True:
             self.record_data(cmd, output)
