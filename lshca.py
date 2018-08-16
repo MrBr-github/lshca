@@ -260,6 +260,13 @@ class PCIDevice(object):
         self.pn = self.get_info_from_lspci_data("\[PN\].*", ".*:(.+)")
         self.lnkCapWidth = self.get_info_from_lspci_data("LnkCap:.*Width.*", ".*Width (x[0-9]+)")
         self.lnkStaWidth = self.get_info_from_lspci_data("LnkSta:.*Width.*", ".*Width (x[0-9]+)")
+        self.pciGen = self.get_info_from_lspci_data(".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn].*",
+                                                    ".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn]([0-9]) +")
+
+        if self.lnkCapWidth != self.lnkStaWidth:
+            self.lnkStaWidth = str(self.lnkStaWidth) + " <- !"
+
+        self.lnkCapWidth = str(self.lnkCapWidth) + " G" + str(self.pciGen)
 
     def __repr__(self):
         delim = " "
