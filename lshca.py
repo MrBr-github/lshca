@@ -1,5 +1,12 @@
 #!/usr/bin/env python2
 
+# Description: This utility comes to provide bird's-eye view of HCAs installed.
+#              It's mainly intended for system administrators, thus defaults configured accordingly.
+# Author: Michael Braverman
+# Email: mrbr.mail@gmail.com
+# Project repo: https://gitlab.com/MrBr-gitlab/lshca/
+# License: This utility provided under GNU GPLv3 license
+
 import os
 import pickle
 import re
@@ -8,14 +15,15 @@ import subprocess
 import sys
 import tarfile
 import time
+import json
 
 
 class Config(object):
     def __init__(self):
         self.debug = False
 
-        self.output_order = ["bdf", "rdma", "net", "port", "numa", "state", "link_layer", "port_rate",
-                             "sriov", "vf_parent", "LnkCapWidth", "LnkStaWidth", "hca_type"]
+        self.output_order = ["PCI_addr", "RDMA", "Net", "Port", "Numa", "State", "Link", "Rate",
+                             "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"]
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
@@ -24,6 +32,7 @@ class Config(object):
         self.ver = "2.4"
 
         self.mst_device_enabled = False
+        self.output_format = "human_readable"
 
 
 class HCAManager(object):
@@ -62,6 +71,7 @@ class HCAManager(object):
 
                 if not hca_found:
                     hca = MlnxHCA(bdf_dev)
+                    hca.set_hca_index(len(self.mlnxHCAs) + 1)
                     self.mlnxHCAs.append(hca)
 
         # Now handle all VFs
@@ -86,17 +96,9 @@ class HCAManager(object):
 
     def display_hcas_info(self):
         out = Output()
-        count = 1
         for hca in self.mlnxHCAs:
             output_info = hca.output_info()
-            output_info["hca_info"]["Dev#"] = count
-
-            output_info["sub_header"] = output_info["hca_info"]
-            output_info["data"] = output_info["bdf_devices"]
-            output_info["data"].insert(0, output_info["bdf_devices_headers"])
-
             out.append(output_info)
-            count += 1
 
         out.print_output()
 
@@ -119,16 +121,19 @@ class Output(object):
     def print_output(self):
         header_line_width = 0
 
-        for line in self.output:
-            for data in line["data"]:
+        for output_key in self.output:
+            for data in output_key["bdf_devices"]:
                 for key in data:
                     if key in config.output_order:
-                        if key not in self.column_width:
-                            self.column_width[key] = len(data[key])
-                        elif len(data[key]) > self.column_width[key]:
-                            self.column_width[key] = len(data[key])
-            for key in line["sub_header"]:
-                current_width = len(key) + len(str(line["sub_header"][key])) + 5
+                        if len(data[key]) > len(key):
+                            width = len(data[key])
+                        else:
+                            width = len(key)
+
+                        if key not in self.column_width or len(data[key]) > self.column_width[key]:
+                            self.column_width[key] = width
+            for key in output_key["hca_info"]:
+                current_width = len(key) + len(str(output_key["hca_info"][key])) + 5
                 if header_line_width < current_width:
                     header_line_width = current_width
 
@@ -139,11 +144,14 @@ class Output(object):
         else:
             self.separator_len = header_line_width
 
-        for line in self.output:
-            self.print_sub_header(line["sub_header"])
-            self.print_data(line["data"])
+        if config.output_format == "human_readable":
+            for output_key in self.output:
+                self.print_hca_info(output_key["hca_info"])
+                self.print_bdf_devices(output_key["bdf_devices"])
+        elif config.output_format == "json":
+            print json.dumps(self.output, indent=4, sort_keys=True)
 
-    def print_sub_header(self, args):
+    def print_hca_info(self, args):
         output = ""
         new_line = ""
         for key in args:
@@ -154,7 +162,7 @@ class Output(object):
         print output
         print separator
 
-    def print_data(self, args):
+    def print_bdf_devices(self, args):
         count = 1
         order_dict = {}
 
@@ -164,18 +172,21 @@ class Output(object):
             position += 1
 
         for line in args:
-            if count == 2:
+            output_list = [""] * len(order_dict)
+            if count == 1:
+                for key in line:
+                    if key in order_dict:
+                        output_list = output_list[0:order_dict[key]] + \
+                                      [str("{0:^{width}}".format(key, width=self.column_width[key]))] + \
+                                      output_list[order_dict[key] + 1:]
+                print ' | '.join(output_list)
                 print "-" * self.separator_len
 
-            output_list = [""] * len(order_dict)
             for key in line:
                 if key in order_dict:
                     output_list = output_list[0:order_dict[key]] + \
                                    [str("{0:^{width}}".format(line[key], width=self.column_width[key]))] + \
                                    output_list[order_dict[key] + 1:]
-
-                if key in order_dict:
-                    pass
 
             count += 1
             print ' | '.join(output_list)
@@ -190,8 +201,8 @@ class MSTDevice(object):
         mst_init_running = False
 
         if config.mst_device_enabled:
-            if "mst_dev" not in config.output_order:
-                config.output_order.append("mst_dev")
+            if "MST_device" not in config.output_order:
+                config.output_order.append("MST_device")
 
             result = data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
             if result == ["0"]:
@@ -503,38 +514,20 @@ class MlnxBFDDevice(object):
             sriov = self.get_sriov() + "  "
         else:
             sriov = "  " + self.get_sriov()
-        output = {"sriov": sriov,
-                  "numa": self.get_numa(),
-                  "bdf": self.get_bdf(),
-                  "vf_parent": self.get_vf_parent(),
-                  "rdma": self.get_rdma(),
-                  "net": self.get_net(),
-                  "hca_type": self.get_hca_type(),
-                  "state": self.get_state(),
-                  "port_rate": self.get_port_rate(),
-                  "port": self.get_port(),
-                  "link_layer": self.get_link_layer(),
-                  "mst_dev": self.get_mst_dev(),
+        output = {"SRIOV": sriov,
+                  "Numa": self.get_numa(),
+                  "PCI_addr": self.get_bdf(),
+                  "Parent_addr": self.get_vf_parent(),
+                  "RDMA": self.get_rdma(),
+                  "Net": self.get_net(),
+                  "HCA_Type": self.get_hca_type(),
+                  "State": self.get_state(),
+                  "Rate": self.get_port_rate(),
+                  "Port": self.get_port(),
+                  "Link": self.get_link_layer(),
+                  "MST_device": self.get_mst_dev(),
                   "LnkCapWidth": self.get_lnk_cap_width(),
                   "LnkStaWidth": self.get_lnk_sta_width()}
-        return output
-
-    @staticmethod
-    def output_headers():
-        output = {"sriov": "SRIOV",
-                  "numa": "Numa",
-                  "bdf": "PCI addr",
-                  "vf_parent": "Parent addr",
-                  "rdma": "RDMA",
-                  "net": "Net",
-                  "hca_type": "HCA Type",
-                  "state": "State",
-                  "port_rate": "Rate",
-                  "port": "Port",
-                  "link_layer": "Link",
-                  "mst_dev": "MST device",
-                  "LnkCapWidth": "LnkCapW",
-                  "LnkStaWidth": "LnkStaW"}
         return output
 
 
@@ -550,12 +543,16 @@ class MlnxHCA(object):
         self.sn = bfd_dev.get_sn()
         self.pn = bfd_dev.get_pn()
         self.fw = bfd_dev.get_fw()
+        self.hca_index = None
 
     def __repr__(self):
         output = ""
         for bfd_dev in self.bfd_devices:
             output = output + str(bfd_dev)
         return output
+
+    def set_hca_index(self, index):
+        self.hca_index = index
 
     def add_bdf_dev(self, new_bfd_dev):
         if new_bfd_dev.get_sriov() == "VF" and new_bfd_dev.get_vf_parent() != "-":
@@ -577,13 +574,16 @@ class MlnxHCA(object):
     def get_description(self):
         return self.bfd_devices[0].get_description()
 
+    def get_hca_index(self):
+        return self.hca_index
+
     def output_info(self):
         output = {"hca_info": {"SN": self.get_sn(),
                                "PN": self.get_pn(),
                                "FW": self.get_fw(),
-                               "Desc": self.get_description()},
-                  "bdf_devices": [],
-                  "bdf_devices_headers": self.bfd_devices[0].output_headers()}
+                               "Desc": self.get_description(),
+                               "Dev#": self.get_hca_index()},
+                  "bdf_devices": []}
         for bdf_dev in self.bfd_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
         return output
@@ -730,6 +730,8 @@ def parse_arguments():
             sys.exit()
         elif user_args[index] == "-d":
             config.debug = True
+        elif user_args[index] == "-j":
+            config.output_format = "json"
         elif user_args[index] == "-s":
             index += 1
             if index > len(user_args):
@@ -749,7 +751,7 @@ def parse_arguments():
 
 
 def usage():
-    print "Usage: lshca [-hdv] [-m <mode>] [-s <data source>]"
+    print "Usage: lshca [-hdvj] [-m <mode>] [-s <data source>]"
     print "-h, --help"
     print "  Show this help"
     print "-d"
@@ -766,6 +768,11 @@ def usage():
     print "    mst - provides MST based info. This data source slows execution"
     print "-v"
     print "  show version"
+    print ""
+    print "Output options:"
+    print "-j"
+    print "  Output data as JSON, not affected by output selection flag"
+    print ""
     sys.exit()
 
 
