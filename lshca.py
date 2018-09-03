@@ -22,8 +22,8 @@ class Config(object):
     def __init__(self):
         self.debug = False
 
-        self.output_order = ["PCI_addr", "RDMA", "Net", "Port", "Numa", "State", "Link", "Rate",
-                             "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"]
+        self.output_order = ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
+                             "Link", "Rate", "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"]
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
@@ -33,6 +33,24 @@ class Config(object):
 
         self.mst_device_enabled = False
         self.output_format = "human_readable"
+
+    def set_output_order(self, output_order):
+        decrement_list = self.output_order
+        increment_list = []
+
+        output_order_list = output_order.split(',')
+        for item in output_order_list:
+            if re.match(r"^-.+", item):
+                item = item[1:]
+                if item in self.output_order:
+                    decrement_list.remove(item)
+            else:
+                increment_list.append(item)
+
+        if len(increment_list) > 0:
+            self.output_order = increment_list
+        else:
+            self.output_order = decrement_list
 
 
 class HCAManager(object):
@@ -119,32 +137,32 @@ class Output(object):
         self.output.append(data)
 
     def print_output(self):
-        header_line_width = 0
-
-        for output_key in self.output:
-            for data in output_key["bdf_devices"]:
-                for key in data:
-                    if key in config.output_order:
-                        if len(data[key]) > len(key):
-                            width = len(data[key])
-                        else:
-                            width = len(key)
-
-                        if key not in self.column_width or len(data[key]) > self.column_width[key]:
-                            self.column_width[key] = width
-            for key in output_key["hca_info"]:
-                current_width = len(key) + len(str(output_key["hca_info"][key])) + 5
-                if header_line_width < current_width:
-                    header_line_width = current_width
-
-        data_line_width = sum(self.column_width.values()) + len(self.column_width)*3 - 2
-
-        if data_line_width > header_line_width:
-            self.separator_len = data_line_width
-        else:
-            self.separator_len = header_line_width
-
         if config.output_format == "human_readable":
+            hca_info_line_width = 0
+
+            for output_key in self.output:
+                for data in output_key["bdf_devices"]:
+                    for key in data:
+                        if key in config.output_order:
+                            if len(data[key]) > len(key):
+                                width = len(data[key])
+                            else:
+                                width = len(key)
+
+                            if key not in self.column_width or len(data[key]) > self.column_width[key]:
+                                self.column_width[key] = width
+                for key in output_key["hca_info"]:
+                    current_width = len(key) + len(str(output_key["hca_info"][key])) + 5
+                    if hca_info_line_width < current_width:
+                        hca_info_line_width = current_width
+
+            bdf_device_line_width = sum(self.column_width.values()) + len(self.column_width)*3 - 2
+
+            if bdf_device_line_width > hca_info_line_width:
+                self.separator_len = bdf_device_line_width
+            else:
+                self.separator_len = hca_info_line_width
+
             for output_key in self.output:
                 self.print_hca_info(output_key["hca_info"])
                 self.print_bdf_devices(output_key["bdf_devices"])
@@ -152,14 +170,24 @@ class Output(object):
             print json.dumps(self.output, indent=4, sort_keys=True)
 
     def print_hca_info(self, args):
-        output = ""
-        new_line = ""
+        order_dict = {}
+
+        position = 0
+        for key in config.output_order:
+            if key in args:
+                order_dict[key] = position
+                position += 1
+
+        output_list = [""] * len(order_dict)
         for key in args:
-            output += new_line + "- " + str(key) + ": " + str(args[key])
-            new_line = "\n"
+            if key in order_dict:
+                output_list = output_list[0:order_dict[key]] + \
+                              ["- " + str(key) + ": " + str(args[key])] + \
+                              output_list[order_dict[key] + 1:]
+
         separator = "-" * self.separator_len
         print separator
-        print output
+        print '\n'.join(output_list)
         print separator
 
     def print_bdf_devices(self, args):
@@ -168,8 +196,9 @@ class Output(object):
 
         position = 0
         for key in config.output_order:
-            order_dict[key] = position
-            position += 1
+            if key in args[0]:
+                order_dict[key] = position
+                position += 1
 
         for line in args:
             output_list = [""] * len(order_dict)
@@ -750,6 +779,13 @@ def parse_arguments():
             else:
                 print "\n" + user_args[index] + " - Unknown parameter for -s\n"
                 usage()
+        elif user_args[index] == "-o":
+            index += 1
+            if index > len(user_args):
+                print "\n-o requires parameter\n"
+                usage()
+            else:
+                config.set_output_order(user_args[index])
         else:
             print "\n" + user_args[index] + " - Unknown parameter\n"
             usage()
@@ -779,6 +815,14 @@ def usage():
     print "Output options:"
     print "-j"
     print "  Output data as JSON, not affected by output selection flag"
+    print "-o"
+    print "  Select fields to output. Comma delimited list. Use field names as they appear in output"
+    print "  Adding \"-\" to field name will remove it from default selections"
+    print ""
+    print ""
+    print "Examples:"
+    print "    lshca -j -s mst -o \"-SN\""
+    print "    lshca -o \"Dev#,Port,Net,PN,Desc\""
     print ""
     sys.exit()
 
