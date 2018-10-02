@@ -1,3 +1,8 @@
+Ver. 2.5
+    - Feature: added LnkCap and LnkSta Width functionality
+    - Feature: Performance improvement with ConnectX3 HCAs
+    - Feature: Added JSON output
+    - Feature: Added "-o" parameter to control output fields
 Ver. 2.4
     - Fixed bug: port identification via dev_id and dev_port (issue #13)
     - Minor bugs: issue #15
