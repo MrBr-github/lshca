@@ -29,7 +29,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "2.4"
+        self.ver = "2.5"
 
         self.mst_device_enabled = False
         self.output_format = "human_readable"
