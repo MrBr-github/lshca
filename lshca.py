@@ -23,10 +23,12 @@ class Config(object):
         self.debug = False
 
         self.output_view = "system"
-        self.output_order_general = {\
+        self.output_order_general = {
                     "system": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
-                       "Link", "Rate", "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"],\
-                    "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State"]}
+                               "Link", "Rate", "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"],
+                    "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "PLid", "PGuid",
+                           "IbNetPref"]
+        }
         self.output_order = self.output_order_general[self.output_view]
 
         self.record_data_for_debug = False
@@ -416,6 +418,19 @@ class SYSFSDevice(object):
         self.port_list = data_source.list_dir_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/").rstrip()
         self.port_list = self.port_list.split(" ")
 
+        self.plid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                    "/ports/" + str(self.port) + "/lid")
+        self.plid = str(int(self.plid, 16))
+
+        full_guid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                    "/ports/" + str(self.port) + "/gids/0")
+
+        self.pguid = extract_string_by_regex(full_guid, "((:[A-Fa-f0-9]{4}){4})$", "").lower()
+        self.pguid = re.sub(':', '', self.pguid)
+
+        self.ib_net_prefix = extract_string_by_regex(full_guid, "^(([A-Fa-f0-9]{4}:){4})", "").lower()
+        self.ib_net_prefix = re.sub(':', '', self.ib_net_prefix)
+
     def __repr__(self):
         delim = " "
         return "SYS device:" + delim +\
@@ -465,6 +480,15 @@ class SYSFSDevice(object):
 
     def get_port(self):
         return str(self.port)
+
+    def get_plid(self):
+        return self.plid
+
+    def get_pguid(self):
+        return self.pguid
+
+    def get_ib_net_prefix(self):
+        return self.ib_net_prefix
 
 
 class MlnxBFDDevice(object):
@@ -546,6 +570,15 @@ class MlnxBFDDevice(object):
     def get_port(self):
         return self.sysFSDevice.get_port()
 
+    def get_plid(self):
+        return self.sysFSDevice.get_plid()
+
+    def get_pguid(self):
+        return self.sysFSDevice.get_pguid()
+
+    def get_ib_net_prefix(self):
+        return self.sysFSDevice.get_ib_net_prefix()
+
     def get_mst_dev(self):
         return self.mstDevice.get_mst_device()
 
@@ -567,7 +600,10 @@ class MlnxBFDDevice(object):
                   "Link": self.get_link_layer(),
                   "MST_device": self.get_mst_dev(),
                   "LnkCapWidth": self.get_lnk_cap_width(),
-                  "LnkStaWidth": self.get_lnk_sta_width()}
+                  "LnkStaWidth": self.get_lnk_sta_width(),
+                  "PLid": self.get_plid(),
+                  "PGuid": self.get_pguid(),
+                  "IbNetPref": self.get_ib_net_prefix()}
         return output
 
 
