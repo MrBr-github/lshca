@@ -22,8 +22,12 @@ class Config(object):
     def __init__(self):
         self.debug = False
 
-        self.output_order = ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
-                             "Link", "Rate", "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"]
+        self.output_view = "system"
+        self.output_order_general = {\
+                    "system": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
+                       "Link", "Rate", "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"],\
+                    "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State"]}
+        self.output_order = self.output_order_general[self.output_view]
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
@@ -766,6 +770,19 @@ def parse_arguments():
             sys.exit()
         elif user_args[index] == "-d":
             config.debug = True
+        elif user_args[index] == "-w":
+            index += 1
+            if index > len(user_args):
+                print "\n-w requires parameter\n"
+                usage()
+
+            if user_args[index] == "ib":
+                config.output_order = config.output_order_general["ib"]
+            elif user_args[index] == "system":
+                config.output_order = config.output_order_general["system"]
+            else:
+                print "\n" + user_args[index] + " - Unknown parameter for -w\n"
+                usage()
         elif user_args[index] == "-j":
             config.output_format = "json"
         elif user_args[index] == "-s":
@@ -813,6 +830,10 @@ def usage():
     print "  show version"
     print ""
     print "Output options:"
+    print "-w"
+    print "  Show output view. Views are"
+    print "    system - (default). Show system oriented HCA info"
+    print "    ib     - Show IB oriented HCA info "
     print "-j"
     print "  Output data as JSON, not affected by output selection flag"
     print "-o"
