@@ -30,6 +30,9 @@ class Config(object):
                            "IbNetPref"]
         }
         self.output_order = self.output_order_general[self.output_view]
+        self.show_warnings_and_errors = True
+        self.warning_sign = "*"
+        self.error_sign = " >!<"
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
@@ -299,8 +302,8 @@ class PCIDevice(object):
         self.pciGen = self.get_info_from_lspci_data(".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn].*",
                                                     ".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn]([0-9]) +")
 
-        if self.lnkCapWidth != self.lnkStaWidth:
-            self.lnkStaWidth = str(self.lnkStaWidth) + " <- !"
+        if self.lnkCapWidth != self.lnkStaWidth and config.show_warnings_and_errors is True:
+            self.lnkStaWidth = str(self.lnkStaWidth) + config.error_sign
 
         self.lnkCapWidth = str(self.lnkCapWidth) + " G" + str(self.pciGen)
 
@@ -413,8 +416,8 @@ class SYSFSDevice(object):
         self.port_rate = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
                                                          str(self.port) + "/rate")
         self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
-        if self.state == "down":
-            self.port_rate = self.port_rate + "*"
+        if self.state == "down" and config.show_warnings_and_errors is True:
+            self.port_rate = self.port_rate + config.warning_sign
 
         self.port_list = data_source.list_dir_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/").rstrip()
         self.port_list = self.port_list.split(" ")
@@ -579,9 +582,9 @@ class MlnxBFDDevice(object):
         return self.pciDevice.get_lnk_sta_width()
 
     def get_sriov(self):
-        if self.sysFSDevice.get_sriov() == "PF" and \
+        if config.show_warnings_and_errors is True and self.sysFSDevice.get_sriov() == "PF" and \
                 re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.get_description()):
-            return self.sysFSDevice.get_sriov() + "*"
+            return self.sysFSDevice.get_sriov() + config.warning_sign
         else:
             return self.sysFSDevice.get_sriov()
 
@@ -850,6 +853,10 @@ def find_in_list(list_to_search_in, regex_pattern):
 def parse_arguments():
     user_args = sys.argv[1:]
 
+    # if output not to terminal
+    if sys.stdout.isatty() is False:
+        config.show_warnings_and_errors = False
+
     index = 0
     while index < len(user_args):
         if user_args[index] == "-h" or user_args[index] == "--help":
@@ -888,6 +895,7 @@ def parse_arguments():
                 usage()
         elif user_args[index] == "-j":
             config.output_format = "json"
+            config.show_warnings_and_errors = False
         elif user_args[index] == "-s":
             index += 1
             if index >= len(user_args):
@@ -953,6 +961,13 @@ def usage():
     print "  Select fields to output. Comma delimited list. Use field names as they appear in output"
     print "  Adding \"-\" to field name will remove it from default selections"
     print ""
+    print "Output warnings and errors:"
+    print " In some cases warning and error signs will be shown. They are highlighting obvious issues"
+    print " Warnings and errors won't be visible in JSON output and/or if the output is not to terminal"
+    print " " + config.warning_sign + "\t- Warning."
+    print "\tExample: speed of disabled port might be 10G, where the actual speed port is 100G"
+    print " " + config.error_sign + "\t- Error."
+    print "\tExample: HCA requires x16 PCI lanes, but only x8 available on the slot"
     print ""
     print "Examples:"
     print "    lshca -j -s mst -o \"-SN\""
