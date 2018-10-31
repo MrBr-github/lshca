@@ -38,6 +38,7 @@ class Config(object):
         self.ver = "2.5"
 
         self.mst_device_enabled = False
+        self.saquery_device_enabled = False
         self.output_format = "human_readable"
 
     def set_output_order(self, output_order):
@@ -422,6 +423,10 @@ class SYSFSDevice(object):
                                                     "/ports/" + str(self.port) + "/lid")
         self.plid = str(int(self.plid, 16))
 
+        self.smlid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                     "/ports/" + str(self.port) + "/sm_lid")
+        self.smlid = str(int(self.smlid, 16))
+
         full_guid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                     "/ports/" + str(self.port) + "/gids/0")
 
@@ -484,11 +489,55 @@ class SYSFSDevice(object):
     def get_plid(self):
         return self.plid
 
+    def get_smlid(self):
+        return self.smlid
+
     def get_pguid(self):
         return self.pguid
 
     def get_ib_net_prefix(self):
         return self.ib_net_prefix
+
+
+class SAQueryDevice(object):
+    def __init__(self, rdma, port, plid, smlid, data_source):
+        self.sw_guid = ""
+        self.sw_description = ""
+        self.sm_guid = ""
+
+        if config.saquery_device_enabled:
+            if "SMGuid" not in config.output_order:
+                config.output_order.append("SMGuid")
+            if "SwGuid" not in config.output_order:
+                config.output_order.append("SwGuid")
+            if "SwDescription" not in config.output_order:
+                config.output_order.append("SwDescription")
+
+            self.data = data_source.exec_shell_cmd("saquery LR -C " + rdma + " -P " + port + " " + plid)
+            self.sw_lid = self.get_info_from_saquery_data(".*ToLID.*", "\.+([0-9]+)")
+
+            self.data = data_source.exec_shell_cmd("saquery NR -C " + rdma + " -P " + port + " " + self.sw_lid)
+            self.sw_guid = self.get_info_from_saquery_data(".*node_guid.*", "\.+(.*)")
+            self.sw_guid = extract_string_by_regex(self.sw_guid, "0x(.*)")
+            self.sw_description = self.get_info_from_saquery_data(".*NodeDescription.*", "\.+(.*)")
+
+            self.data = data_source.exec_shell_cmd("saquery SMIR -C " + rdma + " -P " + port + " " + smlid)
+            self.sm_guid = self.get_info_from_saquery_data(".*GUID.*", "\.+(.*)")
+            self.sm_guid = extract_string_by_regex(self.sm_guid, "0x(.*)")
+
+    def get_info_from_saquery_data(self, search_regex, output_regex):
+        search_result = find_in_list(self.data, search_regex)
+        search_result = extract_string_by_regex(search_result, output_regex)
+        return str(search_result).strip()
+
+    def get_sw_guid(self):
+        return self.sw_guid
+
+    def get_sw_description(self):
+        return self.sw_description
+
+    def get_sm_guid(self):
+        return self.sm_guid
 
 
 class MlnxBFDDevice(object):
@@ -497,6 +546,8 @@ class MlnxBFDDevice(object):
         self.sysFSDevice = SYSFSDevice(self.bdf, data_source, port)
         self.pciDevice = PCIDevice(self.bdf, data_source)
         self.mstDevice = MSTDevice(self.bdf, data_source)
+        self.saQueryDevice = SAQueryDevice(self.get_rdma(), self.get_port(), self.get_plid(), self.get_smlid(),
+                                           data_source)
         self.slaveBDFDevices = []
 
     def __repr__(self):
@@ -573,6 +624,9 @@ class MlnxBFDDevice(object):
     def get_plid(self):
         return self.sysFSDevice.get_plid()
 
+    def get_smlid(self):
+        return self.sysFSDevice.get_smlid()
+
     def get_pguid(self):
         return self.sysFSDevice.get_pguid()
 
@@ -581,6 +635,15 @@ class MlnxBFDDevice(object):
 
     def get_mst_dev(self):
         return self.mstDevice.get_mst_device()
+
+    def get_sw_guid(self):
+        return self.saQueryDevice.get_sw_guid()
+
+    def get_sw_description(self):
+        return self.saQueryDevice.get_sw_description()
+
+    def get_sm_guid(self):
+        return self.saQueryDevice.get_sm_guid()
 
     def output_info(self):
         if self.get_sriov() in ("PF", "PF*"):
@@ -603,7 +666,10 @@ class MlnxBFDDevice(object):
                   "LnkStaWidth": self.get_lnk_sta_width(),
                   "PLid": self.get_plid(),
                   "PGuid": self.get_pguid(),
-                  "IbNetPref": self.get_ib_net_prefix()}
+                  "IbNetPref": self.get_ib_net_prefix(),
+                  "SMGuid": self.get_sm_guid(),
+                  "SwGuid": self.get_sw_guid(),
+                  "SwDescription": self.get_sw_description()}
         return output
 
 
@@ -684,7 +750,7 @@ class DataSource(object):
             output = self.cache[cache_key]
 
         else:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             output, error = process.communicate()
             if use_cache is True:
                 self.cache.update({cache_key: output})
@@ -814,6 +880,7 @@ def parse_arguments():
 
             if user_args[index] == "ib":
                 config.output_order = config.output_order_general["ib"]
+                config.saquery_device_enabled = True
             elif user_args[index] == "system":
                 config.output_order = config.output_order_general["system"]
             else:
@@ -827,11 +894,19 @@ def parse_arguments():
                 print "\n-s requires parameter\n"
                 usage()
 
-            if user_args[index] == "mst":
-                config.mst_device_enabled = True
-            else:
-                print "\n" + user_args[index] + " - Unknown parameter for -s\n"
-                usage()
+            data_source_list = user_args[index].split(',')
+            for data_source in data_source_list:
+                if data_source == "lspci":
+                    pass
+                elif data_source == "sysfs":
+                    pass
+                elif data_source == "mst":
+                    config.mst_device_enabled = True
+                elif data_source == "saquery":
+                    config.saquery_device_enabled = True
+                else:
+                    print "\n" + user_args[index] + " - Unknown parameter for -s\n"
+                    usage()
         elif user_args[index] == "-o":
             index += 1
             if index > len(user_args):
@@ -856,23 +931,25 @@ def usage():
     print "  Mode of operation"
     print "    normal - (default) list HCAs"
     print "    record - record all data for debug and lists HCAs"
-    print "-s <mst>"
-    print "  Add optional data sources."
+    print "-s <mst,saquery>"
+    print "  Add optional data sources. Comma delimited list."
     print "  Always on data sources are:"
-    print "    sysfs, lspci"
+    print "    lspci    - provides lspci utility based info. Requires root for full output "
+    print "    sysfs    - provides driver based info retrieved from /sys/"
     print "  Optional data sources:"
-    print "    mst - provides MST based info. This data source slows execution"
+    print "    mst      - provides MST based info. This data source slows execution"
+    print "    saquery  - provides SA query based info of the IB network"
     print "-v"
     print "  show version"
     print ""
     print "Output options:"
-    print "-w"
+    print "-w <view>"
     print "  Show output view. Views are"
     print "    system - (default). Show system oriented HCA info"
-    print "    ib     - Show IB oriented HCA info "
+    print "    ib     - Show IB oriented HCA . Implies \"saquery\" data source"
     print "-j"
     print "  Output data as JSON, not affected by output selection flag"
-    print "-o"
+    print "-o <field_names>"
     print "  Select fields to output. Comma delimited list. Use field names as they appear in output"
     print "  Adding \"-\" to field name will remove it from default selections"
     print ""
