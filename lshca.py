@@ -856,7 +856,7 @@ def parse_arguments():
             usage()
         elif user_args[index] == "-m":
             index += 1
-            if index > len(user_args):
+            if index >= len(user_args):
                 print "\n-m requires parameter\n"
                 usage()
 
@@ -874,7 +874,7 @@ def parse_arguments():
             config.debug = True
         elif user_args[index] == "-w":
             index += 1
-            if index > len(user_args):
+            if index >= len(user_args):
                 print "\n-w requires parameter\n"
                 usage()
 
@@ -890,7 +890,7 @@ def parse_arguments():
             config.output_format = "json"
         elif user_args[index] == "-s":
             index += 1
-            if index > len(user_args):
+            if index >= len(user_args):
                 print "\n-s requires parameter\n"
                 usage()
 
@@ -909,7 +909,7 @@ def parse_arguments():
                     usage()
         elif user_args[index] == "-o":
             index += 1
-            if index > len(user_args):
+            if index >= len(user_args):
                 print "\n-o requires parameter\n"
                 usage()
             else:
