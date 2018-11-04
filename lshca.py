@@ -26,8 +26,8 @@ class Config(object):
         self.output_order_general = {
                     "system": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
                                "Link", "Rate", "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"],
-                    "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "PLid", "PGuid",
-                           "IbNetPref"]
+                    "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "VrtHCA", "PLid",
+                           "PGuid", "IbNetPref"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -439,6 +439,18 @@ class SYSFSDevice(object):
         self.ib_net_prefix = extract_string_by_regex(full_guid, "^(([A-Fa-f0-9]{4}:){4})", "").lower()
         self.ib_net_prefix = re.sub(':', '', self.ib_net_prefix)
 
+        self.has_smi = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                        "/ports/" + str(self.port) + "/has_smi")
+        self.has_smi = self.has_smi.rstrip()
+        if self.link_layer != "IB":
+            self.virt_hca = "=N/A="
+        elif self.has_smi == "0":
+            self.virt_hca = "Virt"
+        elif self.has_smi == "1":
+            self.virt_hca = "Phis"
+        else:
+            self.virt_hca = ""
+
     def __repr__(self):
         delim = " "
         return "SYS device:" + delim +\
@@ -500,6 +512,9 @@ class SYSFSDevice(object):
 
     def get_ib_net_prefix(self):
         return self.ib_net_prefix
+
+    def get_virt_hca(self):
+        return self.virt_hca
 
 
 class SAQueryDevice(object):
@@ -636,6 +651,9 @@ class MlnxBFDDevice(object):
     def get_ib_net_prefix(self):
         return self.sysFSDevice.get_ib_net_prefix()
 
+    def get_virt_hca(self):
+        return self.sysFSDevice.get_virt_hca()
+
     def get_mst_dev(self):
         return self.mstDevice.get_mst_device()
 
@@ -672,7 +690,8 @@ class MlnxBFDDevice(object):
                   "IbNetPref": self.get_ib_net_prefix(),
                   "SMGuid": self.get_sm_guid(),
                   "SwGuid": self.get_sw_guid(),
-                  "SwDescription": self.get_sw_description()}
+                  "SwDescription": self.get_sw_description(),
+                  "VrtHCA": self.get_virt_hca()}
         return output
 
 
