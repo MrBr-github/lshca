@@ -42,25 +42,96 @@ class Config(object):
 
         self.mst_device_enabled = False
         self.saquery_device_enabled = False
+
         self.output_format = "human_readable"
+        self.select_output_filter = ""
+        self.where_output_filter = ""
 
-    def set_output_order(self, output_order):
-        decrement_list = self.output_order
-        increment_list = []
+    @staticmethod
+    def parse_arguments():
+        user_args = sys.argv[1:]
 
-        output_order_list = output_order.split(',')
-        for item in output_order_list:
-            if re.match(r"^-.+", item):
-                item = item[1:]
-                if item in self.output_order:
-                    decrement_list.remove(item)
+        # if output not to terminal
+        if sys.stdout.isatty() is False:
+            config.show_warnings_and_errors = False
+
+        index = 0
+        while index < len(user_args):
+            if user_args[index] == "-h" or user_args[index] == "--help":
+                usage()
+            elif user_args[index] == "-m":
+                index += 1
+                if index >= len(user_args):
+                    print "\n-m requires parameter\n"
+                    usage()
+
+                if user_args[index] == "normal":
+                    pass
+                elif user_args[index] == "record":
+                    config.record_data_for_debug = True
+                else:
+                    print "\n" + user_args[index] + " - Unknown parameter for -m\n"
+                    usage()
+            elif user_args[index] == "-v":
+                print "lshca ver. " + config.ver
+                sys.exit()
+            elif user_args[index] == "-d":
+                config.debug = True
+            elif user_args[index] == "-w":
+                index += 1
+                if index >= len(user_args):
+                    print "\n-w requires parameter\n"
+                    usage()
+
+                if user_args[index] == "ib":
+                    config.output_order = config.output_order_general["ib"]
+                    config.saquery_device_enabled = True
+                elif user_args[index] == "system":
+                    config.output_order = config.output_order_general["system"]
+                else:
+                    print "\n" + user_args[index] + " - Unknown parameter for -w\n"
+                    usage()
+            elif user_args[index] == "-j":
+                config.output_format = "json"
+                config.show_warnings_and_errors = False
+            elif user_args[index] == "-s":
+                index += 1
+                if index >= len(user_args):
+                    print "\n-s requires parameter\n"
+                    usage()
+
+                data_source_list = user_args[index].split(',')
+                for data_source in data_source_list:
+                    if data_source == "lspci":
+                        pass
+                    elif data_source == "sysfs":
+                        pass
+                    elif data_source == "mst":
+                        config.mst_device_enabled = True
+                    elif data_source == "saquery":
+                        config.saquery_device_enabled = True
+                    else:
+                        print "\n" + user_args[index] + " - Unknown parameter for -s\n"
+                        usage()
+            elif user_args[index] == "-o":
+                index += 1
+                if index >= len(user_args):
+                    print "\n-o requires parameter\n"
+                    usage()
+                else:
+                    config.select_output_filter += user_args[index]
+            elif user_args[index] == "-ow":
+                index += 1
+                if index >= len(user_args):
+                    print "\n-ow requires parameter\n"
+                    usage()
+                else:
+                    config.where_output_filter += user_args[index]
             else:
-                increment_list.append(item)
+                print "\n" + user_args[index] + " - Unknown parameter\n"
+                usage()
 
-        if len(increment_list) > 0:
-            self.output_order = increment_list
-        else:
-            self.output_order = decrement_list
+            index += 1
 
 
 class HCAManager(object):
@@ -142,18 +213,75 @@ class Output(object):
         self.output = []
         self.column_width = {}
         self.separator_len = 0
+        self.output_filter = {}
+        self.output_order = config.output_order
 
     def append(self, data):
         self.output.append(data)
 
+    def apply_select_output_filters(self):
+        if not config.select_output_filter:
+            return
+
+        decrement_list = self.output_order
+        increment_list = []
+
+        output_order_list = config.select_output_filter.split(',')
+        for item in output_order_list:
+            if re.match(r"^-.+", item):
+                item = item[1:]
+                if item in self.output_order:
+                    decrement_list.remove(item)
+            else:
+                increment_list.append(item)
+
+        if len(increment_list) > 0:
+            self.output_order = increment_list
+        else:
+            self.output_order = decrement_list
+
+    def apply_where_output_filters(self):
+        if not config.where_output_filter:
+            return
+
+        output_filter = dict(item.split("=") for item in config.where_output_filter.split(','))
+        for filter_key in output_filter:
+            output_filter[filter_key] = re.compile(output_filter[filter_key])
+
+        for filter_key in output_filter:
+            remove_hca_list = []
+            for hca in self.output:
+                remove_bdf_list = []
+                for bdf_device in hca["bdf_devices"]:
+                    if filter_key in bdf_device and not re.match(output_filter[filter_key],
+                                                                 bdf_device[filter_key]):
+                        remove_bdf_list.append(bdf_device)
+
+                for bdf_device in remove_bdf_list:
+                    hca["bdf_devices"].remove(bdf_device)
+
+                if len(hca["bdf_devices"]) == 0 or \
+                        filter_key in hca["hca_info"] and not \
+                        re.match(output_filter[filter_key], hca["hca_info"][filter_key]):
+                    remove_hca_list.append(hca)
+
+            for hca in remove_hca_list:
+                self.output.remove(hca)
+
+    def filter_out_data(self):
+        self.apply_select_output_filters()
+        self.apply_where_output_filters()
+
     def print_output(self):
+        self.filter_out_data()
+
         if config.output_format == "human_readable":
             hca_info_line_width = 0
 
             for output_key in self.output:
                 for data in output_key["bdf_devices"]:
                     for key in data:
-                        if key in config.output_order:
+                        if key in self.output_order:
                             if len(data[key]) > len(key):
                                 width = len(data[key])
                             else:
@@ -183,7 +311,7 @@ class Output(object):
         order_dict = {}
 
         position = 0
-        for key in config.output_order:
+        for key in self.output_order:
             if key in args:
                 order_dict[key] = position
                 position += 1
@@ -205,7 +333,7 @@ class Output(object):
         order_dict = {}
 
         position = 0
-        for key in config.output_order:
+        for key in self.output_order:
             if key in args[0]:
                 order_dict[key] = position
                 position += 1
@@ -850,85 +978,6 @@ def find_in_list(list_to_search_in, regex_pattern):
         return ""
 
 
-def parse_arguments():
-    user_args = sys.argv[1:]
-
-    # if output not to terminal
-    if sys.stdout.isatty() is False:
-        config.show_warnings_and_errors = False
-
-    index = 0
-    while index < len(user_args):
-        if user_args[index] == "-h" or user_args[index] == "--help":
-            usage()
-        elif user_args[index] == "-m":
-            index += 1
-            if index >= len(user_args):
-                print "\n-m requires parameter\n"
-                usage()
-
-            if user_args[index] == "normal":
-                pass
-            elif user_args[index] == "record":
-                config.record_data_for_debug = True
-            else:
-                print "\n" + user_args[index] + " - Unknown parameter for -m\n"
-                usage()
-        elif user_args[index] == "-v":
-            print "lshca ver. " + config.ver
-            sys.exit()
-        elif user_args[index] == "-d":
-            config.debug = True
-        elif user_args[index] == "-w":
-            index += 1
-            if index >= len(user_args):
-                print "\n-w requires parameter\n"
-                usage()
-
-            if user_args[index] == "ib":
-                config.output_order = config.output_order_general["ib"]
-                config.saquery_device_enabled = True
-            elif user_args[index] == "system":
-                config.output_order = config.output_order_general["system"]
-            else:
-                print "\n" + user_args[index] + " - Unknown parameter for -w\n"
-                usage()
-        elif user_args[index] == "-j":
-            config.output_format = "json"
-            config.show_warnings_and_errors = False
-        elif user_args[index] == "-s":
-            index += 1
-            if index >= len(user_args):
-                print "\n-s requires parameter\n"
-                usage()
-
-            data_source_list = user_args[index].split(',')
-            for data_source in data_source_list:
-                if data_source == "lspci":
-                    pass
-                elif data_source == "sysfs":
-                    pass
-                elif data_source == "mst":
-                    config.mst_device_enabled = True
-                elif data_source == "saquery":
-                    config.saquery_device_enabled = True
-                else:
-                    print "\n" + user_args[index] + " - Unknown parameter for -s\n"
-                    usage()
-        elif user_args[index] == "-o":
-            index += 1
-            if index >= len(user_args):
-                print "\n-o requires parameter\n"
-                usage()
-            else:
-                config.set_output_order(user_args[index])
-        else:
-            print "\n" + user_args[index] + " - Unknown parameter\n"
-            usage()
-
-        index += 1
-
-
 def usage():
     print "Usage: lshca [-hdvj] [-m <mode>] [-s <data source>]"
     print "-h, --help"
@@ -958,8 +1007,12 @@ def usage():
     print "-j"
     print "  Output data as JSON, not affected by output selection flag"
     print "-o <field_names>"
-    print "  Select fields to output. Comma delimited list. Use field names as they appear in output"
+    print "  SELECT fields to output. Comma delimited list. Use field names as they appear in output"
     print "  Adding \"-\" to field name will remove it from default selections"
+    print "-ow <field_name=value>"
+    print "  Select fields to output, WHERE field value is regex."
+    print "  Comma delimited list. Use field names as they appear in output"
+    print ""
     print ""
     print "Output warnings and errors:"
     print " In some cases warning and error signs will be shown. They are highlighting obvious issues"
@@ -971,7 +1024,7 @@ def usage():
     print ""
     print "Examples:"
     print "    lshca -j -s mst -o \"-SN\""
-    print "    lshca -o \"Dev#,Port,Net,PN,Desc\""
+    print "    lshca -o \"Dev#,Port,Net,PN,Desc,RDMA\" -ow \"RDMA=mlx5_[48]\""
     print ""
     sys.exit()
 
@@ -983,7 +1036,7 @@ def main():
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script")
 
-    parse_arguments()
+    config.parse_arguments()
 
     data_source = DataSource()
 
