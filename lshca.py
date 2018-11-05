@@ -220,25 +220,32 @@ class Output(object):
         self.output.append(data)
 
     def apply_select_output_filters(self):
-        if not config.select_output_filter:
-            return
+        if config.select_output_filter:
+            decrement_list = self.output_order
+            increment_list = []
 
-        decrement_list = self.output_order
-        increment_list = []
+            output_filter = config.select_output_filter.split(',')
+            for item in output_filter:
+                if re.match(r"^-.+", item):
+                    item = item[1:]
+                    if item in self.output_order:
+                        decrement_list.remove(item)
+                else:
+                    increment_list.append(item)
 
-        output_order_list = config.select_output_filter.split(',')
-        for item in output_order_list:
-            if re.match(r"^-.+", item):
-                item = item[1:]
-                if item in self.output_order:
-                    decrement_list.remove(item)
+            if len(increment_list) > 0:
+                self.output_order = increment_list
             else:
-                increment_list.append(item)
+                self.output_order = decrement_list
 
-        if len(increment_list) > 0:
-            self.output_order = increment_list
-        else:
-            self.output_order = decrement_list
+        output_data_keys = list(self.output[0]["hca_info"]) + list(self.output[0]["bdf_devices"][0])
+        data_keys_remove_list = list(set(output_data_keys) - set(self.output_order))
+
+        for hca in self.output:
+            for key in data_keys_remove_list:
+                hca["hca_info"].pop(key, None)
+                for bdf_device in hca["bdf_devices"]:
+                    bdf_device.pop(key, None)
 
     def apply_where_output_filters(self):
         if not config.where_output_filter:
@@ -568,7 +575,7 @@ class SYSFSDevice(object):
         self.ib_net_prefix = re.sub(':', '', self.ib_net_prefix)
 
         self.has_smi = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                        "/ports/" + str(self.port) + "/has_smi")
+                                                       "/ports/" + str(self.port) + "/has_smi")
         self.has_smi = self.has_smi.rstrip()
         if self.link_layer != "IB":
             self.virt_hca = "=N/A="
@@ -1024,7 +1031,7 @@ def usage():
     print "    system - (default). Show system oriented HCA info"
     print "    ib     - Show IB oriented HCA . Implies \"saquery\" data source"
     print "-j"
-    print "  Output data as JSON, not affected by output selection flag"
+    print "  Output data as JSON, affected by output selection flag"
     print "-o <field_names>"
     print "  SELECT fields to output. Comma delimited list. Use field names as they appear in output"
     print "  Adding \"-\" to field name will remove it from default selections"
