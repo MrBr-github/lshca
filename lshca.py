@@ -559,11 +559,19 @@ class SYSFSDevice(object):
 
         self.plid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                     "/ports/" + str(self.port) + "/lid")
-        self.plid = str(int(self.plid, 16))
+        try:
+            self.plid = int(self.plid, 16)
+        except ValueError:
+            self.plid = ""
+        self.plid = str(self.plid)
 
         self.smlid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                      "/ports/" + str(self.port) + "/sm_lid")
-        self.smlid = str(int(self.smlid, 16))
+        try:
+            self.smlid = int(self.smlid, 16)
+        except ValueError:
+            self.smlid = ""
+        self.smlid = str(self.smlid)
 
         full_guid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                     "/ports/" + str(self.port) + "/gids/0")
