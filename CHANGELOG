@@ -1,3 +1,11 @@
+Ver. 2.6
+    - Feature: Added "by field value" output filter
+    - Feature: Added views option, default view called "system"
+    - Feature: Added "ib" view that contains IB network oriented information
+    - Feature: Added saquery data source. It provides following data: SMGuid, SwGuid, SwDescription
+    - Feature: Added following data to sysfs data source: VrtHCA, PLid, PGuid, IbNetPref
+    - Change: JSON affected by output filters
+    - Change: Warnings and errors won't be visible in JSON output and/or if the output is not to terminal
 Ver. 2.5
     - Feature: added LnkCap and LnkSta Width functionality
     - Feature: Performance improvement with ConnectX3 HCAs
