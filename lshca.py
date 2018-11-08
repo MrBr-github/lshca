@@ -276,8 +276,8 @@ class Output(object):
                 self.output.remove(hca)
 
     def filter_out_data(self):
-        self.apply_select_output_filters()
         self.apply_where_output_filters()
+        self.apply_select_output_filters()
 
     def print_output(self):
         self.filter_out_data()
