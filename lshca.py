@@ -432,6 +432,7 @@ class PCIDevice(object):
         self.description = self.get_info_from_lspci_data("^[0-9].*", str(self.bdf) + ".*:(.+)")
         self.sn = self.get_info_from_lspci_data("\[SN\].*", ".*:(.+)")
         self.pn = self.get_info_from_lspci_data("\[PN\].*", ".*:(.+)")
+        self.revision = self.get_info_from_lspci_data("\[EC\].*", ".*:(.+)")
         self.lnkCapWidth = self.get_info_from_lspci_data("LnkCap:.*Width.*", ".*Width (x[0-9]+)")
         self.lnkStaWidth = self.get_info_from_lspci_data("LnkSta:.*Width.*", ".*Width (x[0-9]+)")
         self.pciGen = self.get_info_from_lspci_data(".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn].*",
@@ -457,7 +458,10 @@ class PCIDevice(object):
         return self.sn
 
     def get_pn(self):
-        return self.pn
+        if self.revision != "=N/A=":
+            return self.pn + "  rev. " + self.revision
+        else:
+            return self.pn
 
     def get_description(self):
         return self.description
