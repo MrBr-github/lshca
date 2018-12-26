@@ -414,6 +414,10 @@ class MSTDevice(object):
                     if data_line != "=N/A=":
                         mst_device = extract_string_by_regex(data_line, ".* (/dev/mst/[^\s]+) .*")
                         self.mst_device = mst_device
+            else:
+                print >> sys.stderr, "\n\nError: MST tool is missing\n\n"
+                # Disable further use.access to mst device
+                config.mst_device_enabled = False
 
     def __repr__(self):
         return self.mst_raw_data
