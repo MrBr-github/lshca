@@ -914,7 +914,26 @@ class DataSource(object):
             config.record_tar_file = config.record_dir + "/" + os.uname()[1] + "--" + str(time.time()) + ".tar"
 
             print "\nlshca started data recording"
-            print "output saved in " + config.record_tar_file + " file\n\n"
+            print "output saved in " + config.record_tar_file + " file\n"
+
+            self.stdout = StringIO.StringIO()
+            sys.stdout = self.stdout
+
+    def __del__(self):
+        if config.record_data_for_debug is True:
+            sys.stdout = sys.__stdout__
+            self.record_data("cmd", "lshca " + " ".join(sys.argv[1:]))
+            self.record_data("output", self.stdout.getvalue())
+
+            config.record_data_for_debug = False
+            environment = list()
+            environment.append("LSHCA: " + config.ver)
+            environment.append("OFED: " + " ".join(self.exec_shell_cmd("ofed_info -s")))
+            environment.append("MST:  " + " ".join(self.exec_shell_cmd("mst version")))
+            environment.append("Uname:  " + " ".join(self.exec_shell_cmd("uname -a")))
+            environment.append("Release:  " + " ".join(self.exec_shell_cmd("cat /etc/*release")))
+            environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
+            self.record_data("environment", environment)
 
     def exec_shell_cmd(self, cmd, use_cache=False):
         cache_key = self.cmd_to_str(cmd)
@@ -930,13 +949,15 @@ class DataSource(object):
 
         output = output.splitlines()
         if config.record_data_for_debug is True:
+            cmd = "shell.cmd/" + cmd
             self.record_data(cmd, output)
 
         return output
 
     def record_data(self, cmd, output):
         p_output = pickle.dumps(output)
-        file_name = self.cmd_to_str(cmd)
+        # file_name = self.cmd_to_str(cmd)
+        file_name = cmd
 
         tarinfo = tarfile.TarInfo(file_name)
         tarinfo.size = len(p_output)
@@ -988,7 +1009,7 @@ class DataSource(object):
                 raise exception
 
         if config.record_data_for_debug is True:
-            cmd = "os.listdir" + dir_to_list
+            cmd = "os.listdir" + dir_to_list.rstrip('/') + "_dir"
             self.record_data(cmd, output)
 
         return output
