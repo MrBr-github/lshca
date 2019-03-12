@@ -238,8 +238,10 @@ class Output(object):
             else:
                 self.output_order = decrement_list
 
-        output_data_keys = list(self.output[0]["hca_info"]) + list(self.output[0]["bdf_devices"][0])
-        data_keys_remove_list = list(set(output_data_keys) - set(self.output_order))
+        data_keys_remove_list = []
+        if len(self.output) > 0:
+            output_data_keys = list(self.output[0]["hca_info"]) + list(self.output[0]["bdf_devices"][0])
+            data_keys_remove_list = list(set(output_data_keys) - set(self.output_order))
 
         for hca in self.output:
             for key in data_keys_remove_list:
