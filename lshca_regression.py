@@ -43,16 +43,15 @@ class BColors:
     UNDERLINE = '\033[4m'
 
 
-def main(tmp_dir_name):
+def main(tmp_dir_name, recorder_sys_argv):
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script")
 
-    config.parse_arguments(sys.argv[1:])
-    config.record_dir = tmp_dir_name
-
     # Comes to handle missing TTY during regression
-    # ===TBD=== should be changed after parse_arguments function refactoring
-    config.show_warnings_and_errors = True
+    config.override__set_tty_exists = True
+    config.parse_arguments(recorder_sys_argv[1:])
+    config.record_data_for_debug = False
+    config.record_dir = tmp_dir_name
 
     data_source = DataSourceRecorded()
 
@@ -62,6 +61,10 @@ def main(tmp_dir_name):
 
 
 def regression():
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
+    args = parser.parse_args(sys.argv[1:])
+
     recorded_data_files_list = os.listdir("recorded_data")
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
@@ -74,10 +77,14 @@ def regression():
             tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
             tar.extractall(path=tmp_dir_name)
 
+            f = open(tmp_dir_name + "/cmd", "r")
+            recorder_sys_argv = pickle.load(f)
+            recorder_sys_argv = recorder_sys_argv.split(" ")
+
             stdout = StringIO.StringIO()
             sys.stdout = stdout
             try:
-                main(tmp_dir_name)
+                main(tmp_dir_name, recorder_sys_argv)
                 output = stdout
             except Exception as e:
                 output = e
@@ -108,6 +115,9 @@ def regression():
                 print '\n'.join(diff)
             else:
                 print "Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC
+                if args.verbose:
+                    print BColors.OKBLUE + "Test output below:" + BColors.ENDC
+                    print test_output
 
         shutil.rmtree(tmp_dir_name)
 
