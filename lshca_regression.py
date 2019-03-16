@@ -63,6 +63,11 @@ def main(tmp_dir_name, recorder_sys_argv):
 def regression():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
+    parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
+                        help=textwrap.dedent('''\
+                                override saved parameters and pass new ones
+                                this parameter HAS to be the LAST one
+                                '''))
     args = parser.parse_args(sys.argv[1:])
 
     recorded_data_files_list = os.listdir("recorded_data")
@@ -77,9 +82,13 @@ def regression():
             tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
             tar.extractall(path=tmp_dir_name)
 
-            f = open(tmp_dir_name + "/cmd", "r")
-            recorder_sys_argv = pickle.load(f)
-            recorder_sys_argv = recorder_sys_argv.split(" ")
+            if args.parameters:
+                recorder_sys_argv = args.parameters[0].split(" ")
+                recorder_sys_argv.insert(0, "lshca_run_by_regression")
+            else:
+                f = open(tmp_dir_name + "/cmd", "r")
+                recorder_sys_argv = pickle.load(f)
+                recorder_sys_argv = recorder_sys_argv.split(" ")
 
             stdout = StringIO.StringIO()
             sys.stdout = stdout
