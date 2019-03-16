@@ -47,7 +47,7 @@ def main(tmp_dir_name):
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script")
 
-    config.parse_arguments()
+    config.parse_arguments(sys.argv[1:])
     config.record_dir = tmp_dir_name
 
     # Comes to handle missing TTY during regression

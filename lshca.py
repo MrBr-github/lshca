@@ -16,6 +16,8 @@ import sys
 import tarfile
 import time
 import json
+import argparse
+import textwrap
 
 
 class Config(object):
@@ -31,6 +33,7 @@ class Config(object):
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
+        self.override__set_tty_exists = False
         self.warning_sign = "*"
         self.error_sign = " >!<"
 
@@ -47,91 +50,108 @@ class Config(object):
         self.select_output_filter = ""
         self.where_output_filter = ""
 
-    @staticmethod
-    def parse_arguments():
-        user_args = sys.argv[1:]
+    def parse_arguments(self, user_args):
+        parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
+                                         epilog=textwrap.dedent('''\
+                     Output warnings and errors:
+                         In some cases warning and error signs will be shown. They highlight obvious issues
+                         Warnings and errors won't be visible in JSON output and/or if the output is not to terminal
+                          ''' + self.warning_sign + '''  == Warning.
+                         Example: speed of disabled port might be 10G, where the actual port speed is 100G
+                         ''' + self.error_sign + '''  == Error.
+                         Example: HCA requires x16 PCI lanes, but only x8 available in the slot
+                         
+                     examples:
+                         lshca -j -s mst -o \"-SN\"
+                         lshca -o \"Dev#,Port,Net,PN,Desc,RDMA\" -ow \"RDMA=mlx5_[48]\"
 
+                        '''))
+
+        parser.add_argument('-d', action='store_true', dest="debug", help="run with debug outputs")
+        parser.add_argument('-j', action='store_true', dest="json",
+                            help="output data as JSON, affected by output selection flag")
+        parser.add_argument('-v', '--version', action='version', version=str('%(prog)s ver. ' + config.ver))
+        parser.add_argument('-m', choices=["normal", "record"], default="normal", dest="mode",
+                            help=textwrap.dedent('''\
+                            mode of operation (default: %(default)s):
+                              normal - list HCAs
+                              record - record all data for debug and lists HCAs\
+                            '''))
+        parser.add_argument('-w', choices=['system', 'ib'], default='system', dest="view",
+                            help=textwrap.dedent('''\
+                            show output view (default: %(default)s):
+                              system - (default). Show system oriented HCA info
+                              ib     - Show IB oriented HCA . Implies "saquery" data source
+                            ''')
+                            )
+        parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'saquery'], nargs='+', dest="sources",
+                            help=textwrap.dedent('''\
+                            add optional data sources (comma delimited list)
+                            always on data sources are:
+                              lspci    - provides lspci utility based info. Requires root for full output 
+                              sysfs    - provides driver based info retrieved from /sys/
+                            optional data sources:
+                              mst      - provides MST based info. This data source slows execution  
+                              saquery  - provides SA query based info of the IB network
+                            '''))
+        parser.add_argument('-o', dest="output_fields_filter", nargs="+",
+                            help=textwrap.dedent('''\
+                            SELECT fields to output (comma delimited list). Use field names as they appear in output
+                            adding \"-\" to field name will remove it from default selections
+                            '''))
+        parser.add_argument('-ow', dest="output_fields_value_filter", nargs='+',
+                            help=textwrap.dedent('''\
+                            select fields to output, WHERE field value is regex: field_name=value
+                            (comma delimited list). Use field names as they appear in output
+                            '''))
+
+        # comes to handle comma separated list of choices
+        cust_user_args = []
+        for arg in user_args:
+            result = arg.split(",")
+            for member in result:
+                cust_user_args.append(member)
+
+        args = parser.parse_args(cust_user_args)
+        self.process_arguments(args)
+
+    def process_arguments(self, args):
         # if output not to terminal
-        if sys.stdout.isatty() is False:
+        if sys.stdout.isatty() is False and self.override__set_tty_exists is False:
             config.show_warnings_and_errors = False
 
-        index = 0
-        while index < len(user_args):
-            if user_args[index] == "-h" or user_args[index] == "--help":
-                usage()
-            elif user_args[index] == "-m":
-                index += 1
-                if index >= len(user_args):
-                    print "\n-m requires parameter\n"
-                    usage()
+        if args.mode == "record":
+            config.record_data_for_debug = True
 
-                if user_args[index] == "normal":
+        if args.debug:
+            config.debug = True
+
+        if args.view == "ib":
+            config.output_order = config.output_order_general["ib"]
+            config.saquery_device_enabled = True
+        elif args.view == "system":
+            config.output_order = config.output_order_general["system"]
+
+        if args.json:
+            config.output_format = "json"
+            config.show_warnings_and_errors = False
+
+        if args.sources:
+            for data_source in args.sources:
+                if data_source == "lspci":
                     pass
-                elif user_args[index] == "record":
-                    config.record_data_for_debug = True
-                else:
-                    print "\n" + user_args[index] + " - Unknown parameter for -m\n"
-                    usage()
-            elif user_args[index] == "-v":
-                print "lshca ver. " + config.ver
-                sys.exit()
-            elif user_args[index] == "-d":
-                config.debug = True
-            elif user_args[index] == "-w":
-                index += 1
-                if index >= len(user_args):
-                    print "\n-w requires parameter\n"
-                    usage()
-
-                if user_args[index] == "ib":
-                    config.output_order = config.output_order_general["ib"]
+                elif data_source == "sysfs":
+                    pass
+                elif data_source == "mst":
+                    config.mst_device_enabled = True
+                elif data_source == "saquery":
                     config.saquery_device_enabled = True
-                elif user_args[index] == "system":
-                    config.output_order = config.output_order_general["system"]
-                else:
-                    print "\n" + user_args[index] + " - Unknown parameter for -w\n"
-                    usage()
-            elif user_args[index] == "-j":
-                config.output_format = "json"
-                config.show_warnings_and_errors = False
-            elif user_args[index] == "-s":
-                index += 1
-                if index >= len(user_args):
-                    print "\n-s requires parameter\n"
-                    usage()
 
-                data_source_list = user_args[index].split(',')
-                for data_source in data_source_list:
-                    if data_source == "lspci":
-                        pass
-                    elif data_source == "sysfs":
-                        pass
-                    elif data_source == "mst":
-                        config.mst_device_enabled = True
-                    elif data_source == "saquery":
-                        config.saquery_device_enabled = True
-                    else:
-                        print "\n" + user_args[index] + " - Unknown parameter for -s\n"
-                        usage()
-            elif user_args[index] == "-o":
-                index += 1
-                if index >= len(user_args):
-                    print "\n-o requires parameter\n"
-                    usage()
-                else:
-                    config.select_output_filter += user_args[index]
-            elif user_args[index] == "-ow":
-                index += 1
-                if index >= len(user_args):
-                    print "\n-ow requires parameter\n"
-                    usage()
-                else:
-                    config.where_output_filter += user_args[index]
-            else:
-                print "\n" + user_args[index] + " - Unknown parameter\n"
-                usage()
+        if args.output_fields_filter:
+            config.select_output_filter = args.output_fields_filter
 
-            index += 1
+        if args.output_fields_value_filter:
+            config.where_output_filter = args.output_fields_value_filter
 
 
 class HCAManager(object):
@@ -224,9 +244,9 @@ class Output(object):
             decrement_list = self.output_order
             increment_list = []
 
-            output_filter = config.select_output_filter.split(',')
+            output_filter = config.select_output_filter
             for item in output_filter:
-                if re.match(r"^-.+", item):
+                if re.match(r"^!.+", item):
                     item = item[1:]
                     if item in self.output_order:
                         decrement_list.remove(item)
@@ -253,7 +273,7 @@ class Output(object):
         if not config.where_output_filter:
             return
 
-        output_filter = dict(item.split("=") for item in config.where_output_filter.split(','))
+        output_filter = dict(item.split("=") for item in config.where_output_filter)
         for filter_key in output_filter:
             output_filter[filter_key] = re.compile(output_filter[filter_key])
 
@@ -1043,57 +1063,6 @@ def find_in_list(list_to_search_in, regex_pattern):
         return ""
 
 
-def usage():
-    print "Usage: lshca [-hdvj] [-m <mode>] [-s <data source>]"
-    print "-h, --help"
-    print "  Show this help"
-    print "-d"
-    print "  run with debug outputs"
-    print "-m <mode>"
-    print "  Mode of operation"
-    print "    normal - (default) list HCAs"
-    print "    record - record all data for debug and lists HCAs"
-    print "-s <mst,saquery>"
-    print "  Add optional data sources. Comma delimited list."
-    print "  Always on data sources are:"
-    print "    lspci    - provides lspci utility based info. Requires root for full output "
-    print "    sysfs    - provides driver based info retrieved from /sys/"
-    print "  Optional data sources:"
-    print "    mst      - provides MST based info. This data source slows execution"
-    print "    saquery  - provides SA query based info of the IB network"
-    print "-v"
-    print "  show version"
-    print ""
-    print "Output options:"
-    print "-w <view>"
-    print "  Show output view. Views are"
-    print "    system - (default). Show system oriented HCA info"
-    print "    ib     - Show IB oriented HCA . Implies \"saquery\" data source"
-    print "-j"
-    print "  Output data as JSON, affected by output selection flag"
-    print "-o <field_names>"
-    print "  SELECT fields to output. Comma delimited list. Use field names as they appear in output"
-    print "  Adding \"-\" to field name will remove it from default selections"
-    print "-ow <field_name=value>"
-    print "  Select fields to output, WHERE field value is regex."
-    print "  Comma delimited list. Use field names as they appear in output"
-    print ""
-    print ""
-    print "Output warnings and errors:"
-    print " In some cases warning and error signs will be shown. They are highlighting obvious issues"
-    print " Warnings and errors won't be visible in JSON output and/or if the output is not to terminal"
-    print " " + config.warning_sign + "\t- Warning."
-    print "\tExample: speed of disabled port might be 10G, where the actual speed port is 100G"
-    print " " + config.error_sign + "\t- Error."
-    print "\tExample: HCA requires x16 PCI lanes, but only x8 available on the slot"
-    print ""
-    print "Examples:"
-    print "    lshca -j -s mst -o \"-SN\""
-    print "    lshca -o \"Dev#,Port,Net,PN,Desc,RDMA\" -ow \"RDMA=mlx5_[48]\""
-    print ""
-    sys.exit()
-
-
 config = Config()
 
 
@@ -1101,7 +1070,7 @@ def main():
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script")
 
-    config.parse_arguments()
+    config.parse_arguments(sys.argv[1:])
 
     data_source = DataSource()
 
