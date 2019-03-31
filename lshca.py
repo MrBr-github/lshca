@@ -29,7 +29,9 @@ class Config(object):
                     "system": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
                                "Link", "Rate", "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"],
                     "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "VrtHCA", "PLid",
-                           "PGuid", "IbNetPref"]
+                           "PGuid", "IbNetPref"],
+                    "roce": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
+                             "Operstate", "RoCEstat"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -49,6 +51,12 @@ class Config(object):
         self.output_format = "human_readable"
         self.select_output_filter = ""
         self.where_output_filter = ""
+
+        self.lossless_roce_expected_trust = "dscp"
+        self.lossless_roce_expected_pfc = "00010000"
+        self.lossless_roce_expected_gtclass = "Global tclass=106"
+        self.lossless_roce_expected_tcp_ecn = "1"
+        self.lossless_roce_expected_rdma_cm_tos = "106"
 
     def parse_arguments(self, user_args):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
@@ -77,11 +85,12 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
-                              ib     - Show IB oriented HCA . Implies "saquery" data source
+                              ib     - Show IB oriented HCA info. Implies "saquery" data source
+                              roce   - Show RoCE oriented HCA info"
                             ''')
                             )
         parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'saquery'], nargs='+', dest="sources",
@@ -129,6 +138,8 @@ class Config(object):
         if args.view == "ib":
             config.output_order = config.output_order_general["ib"]
             config.saquery_device_enabled = True
+        elif args.view == "roce":
+            config.output_order = config.output_order_general["roce"]
         elif args.view == "system":
             config.output_order = config.output_order_general["system"]
 
@@ -624,6 +635,25 @@ class SYSFSDevice(object):
         else:
             self.virt_hca = ""
 
+        self.operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
+
+        self.gtclass = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                       "/tc/1/traffic_class").rstrip()
+        self.tcp_ecn = data_source.read_file_if_exists("/proc/sys/net/ipv4/tcp_ecn").rstrip()
+
+        roce_tos_path_prefix = "/sys/kernel/config/rdma_cm/" + self.rdma
+        roce_tos_path_prefix_cleanup = False
+        try:
+            if not os.path.isdir(roce_tos_path_prefix):
+                os.mkdir(roce_tos_path_prefix)
+                roce_tos_path_prefix_cleanup = True
+            self.rdma_cm_tos = data_source.read_file_if_exists(roce_tos_path_prefix +
+                                                               "/ports/1/default_roce_tos").rstrip()
+            if roce_tos_path_prefix_cleanup:
+                os.rmdir(roce_tos_path_prefix)
+        except OSError:
+            self.rdma_cm_tos = "Failed to retrieve"
+
     def __repr__(self):
         delim = " "
         return "SYS device:" + delim +\
@@ -689,6 +719,18 @@ class SYSFSDevice(object):
     def get_virt_hca(self):
         return self.virt_hca
 
+    def get_operstate(self):
+        return self.operstate
+
+    def get_gtclass(self):
+        return self.gtclass
+
+    def get_tcp_ecn(self):
+        return self.tcp_ecn
+
+    def get_rdma_cm_tos(self):
+        return self.rdma_cm_tos
+
 
 class SAQueryDevice(object):
     def __init__(self, rdma, port, plid, smlid, data_source):
@@ -731,6 +773,26 @@ class SAQueryDevice(object):
         return self.sm_guid
 
 
+class MiscCMDs(object):
+    def __init__(self, net, data_source):
+        self.data_source = data_source
+        self.net = net
+
+    def get_mlnx_qos_trust(self):
+        data = self.data_source.exec_shell_cmd("mlnx_qos -i " + self.net, use_cache=True)
+        regex = "Priority trust state: (.*)"
+        search_result = find_in_list(data, regex)
+        search_result = extract_string_by_regex(search_result, regex)
+        return search_result
+
+    def get_mlnx_qos_pfc(self):
+        data = self.data_source.exec_shell_cmd("mlnx_qos -i " + self.net, use_cache=True)
+        regex = '^\s+enabled\s+(([0-9]\s+)+)'
+        search_result = find_in_list(data, regex)
+        search_result = extract_string_by_regex(search_result, regex).replace(" ", "")
+        return search_result
+
+
 class MlnxBFDDevice(object):
     def __init__(self, bdf, data_source, port=1):
         self.bdf = bdf
@@ -739,6 +801,7 @@ class MlnxBFDDevice(object):
         self.mstDevice = MSTDevice(self.bdf, data_source)
         self.saQueryDevice = SAQueryDevice(self.get_rdma(), self.get_port(), self.get_plid(), self.get_smlid(),
                                            data_source)
+        self.miscDevice = MiscCMDs(self.get_net(), data_source)
         self.slaveBDFDevices = []
 
     def __repr__(self):
@@ -827,6 +890,9 @@ class MlnxBFDDevice(object):
     def get_virt_hca(self):
         return self.sysFSDevice.get_virt_hca()
 
+    def get_operstate(self):
+        return self.sysFSDevice.get_operstate()
+
     def get_mst_dev(self):
         return self.mstDevice.get_mst_device()
 
@@ -838,6 +904,19 @@ class MlnxBFDDevice(object):
 
     def get_sm_guid(self):
         return self.saQueryDevice.get_sm_guid()
+
+    def get_roce_status(self):
+        if self.get_link_layer() != "Eth":
+            return "N/A"
+
+        if self.sysFSDevice.get_gtclass() == config.lossless_roce_expected_gtclass and \
+           self.sysFSDevice.get_tcp_ecn() == config.lossless_roce_expected_tcp_ecn and \
+           self.sysFSDevice.get_rdma_cm_tos() == config.lossless_roce_expected_rdma_cm_tos and \
+           self.miscDevice.get_mlnx_qos_trust() == config.lossless_roce_expected_trust and \
+           self.miscDevice.get_mlnx_qos_pfc() == config.lossless_roce_expected_pfc:
+            return "Lossless"
+        else:
+            return "Lossy"
 
     def output_info(self):
         if self.get_sriov() in ("PF", "PF*"):
@@ -864,7 +943,9 @@ class MlnxBFDDevice(object):
                   "SMGuid": self.get_sm_guid(),
                   "SwGuid": self.get_sw_guid(),
                   "SwDescription": self.get_sw_description(),
-                  "VrtHCA": self.get_virt_hca()}
+                  "VrtHCA": self.get_virt_hca(),
+                  "Operstate": self.get_operstate(),
+                  "RoCEstat": self.get_roce_status()}
         return output
 
 
