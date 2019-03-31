@@ -136,12 +136,14 @@ class Config(object):
             config.debug = True
 
         if args.view == "ib":
-            config.output_order = config.output_order_general["ib"]
             config.saquery_device_enabled = True
+            config.output_view = "ib"
         elif args.view == "roce":
-            config.output_order = config.output_order_general["roce"]
+            config.output_view = "roce"
         elif args.view == "system":
-            config.output_order = config.output_order_general["system"]
+            config.output_view = "system"
+
+        config.output_order = config.output_order_general[config.output_view]
 
         if args.json:
             config.output_format = "json"
@@ -635,24 +637,31 @@ class SYSFSDevice(object):
         else:
             self.virt_hca = ""
 
-        self.operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
+        # ========== RoCE view only related variables ==========
+        self.operstate = None
+        self.gtclass = None
+        self.tcp_ecn = None
+        self.rdma_cm_tos = None
 
-        self.gtclass = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                       "/tc/1/traffic_class").rstrip()
-        self.tcp_ecn = data_source.read_file_if_exists("/proc/sys/net/ipv4/tcp_ecn").rstrip()
+        if config.output_view == "roce":
+            self.operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
 
-        roce_tos_path_prefix = "/sys/kernel/config/rdma_cm/" + self.rdma
-        roce_tos_path_prefix_cleanup = False
-        try:
-            if not os.path.isdir(roce_tos_path_prefix):
-                os.mkdir(roce_tos_path_prefix)
-                roce_tos_path_prefix_cleanup = True
-            self.rdma_cm_tos = data_source.read_file_if_exists(roce_tos_path_prefix +
-                                                               "/ports/1/default_roce_tos").rstrip()
-            if roce_tos_path_prefix_cleanup:
-                os.rmdir(roce_tos_path_prefix)
-        except OSError:
-            self.rdma_cm_tos = "Failed to retrieve"
+            self.gtclass = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                           "/tc/1/traffic_class").rstrip()
+            self.tcp_ecn = data_source.read_file_if_exists("/proc/sys/net/ipv4/tcp_ecn").rstrip()
+
+            roce_tos_path_prefix = "/sys/kernel/config/rdma_cm/" + self.rdma
+            roce_tos_path_prefix_cleanup = False
+            try:
+                if not os.path.isdir(roce_tos_path_prefix):
+                    os.mkdir(roce_tos_path_prefix)
+                    roce_tos_path_prefix_cleanup = True
+                self.rdma_cm_tos = data_source.read_file_if_exists(roce_tos_path_prefix +
+                                                                   "/ports/1/default_roce_tos").rstrip()
+                if roce_tos_path_prefix_cleanup:
+                    os.rmdir(roce_tos_path_prefix)
+            except OSError:
+                self.rdma_cm_tos = "Failed to retrieve"
 
     def __repr__(self):
         delim = " "
