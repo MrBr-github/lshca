@@ -506,7 +506,7 @@ class PCIDevice(object):
 class SYSFSDevice(object):
     def __init__(self, bdf, data_source, port=1):
         self.bdf = bdf
-        self.port = port
+        self.port = str(port)
 
         sys_prefix = "/sys/bus/pci/devices/" + self.bdf
 
@@ -550,24 +550,24 @@ class SYSFSDevice(object):
 
             net_port += 1
 
-            if net_port == self.port:
+            if str(net_port) == self.port:
                 self.net = net
                 break
 
         self.hca_type = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/hca_type").rstrip()
 
         self.state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
-                                                     str(self.port) + "/state")
+                                                     self.port + "/state")
         self.state = extract_string_by_regex(self.state, "[0-9:]+ (.*)", "").lower()
         if self.state == "active":
             self.state = "actv"
 
         self.phys_state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                          "/ports/" + str(self.port) + "/phys_state")
+                                                          "/ports/" + self.port + "/phys_state")
         self.phys_state = extract_string_by_regex(self.phys_state, "[0-9:]+ (.*)", "").lower()
 
         self.link_layer = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                          "/ports/" + str(self.port) + "/link_layer")
+                                                          "/ports/" + self.port + "/link_layer")
         self.link_layer = self.link_layer.rstrip()
         if self.link_layer == "InfiniBand":
             self.link_layer = "IB"
@@ -578,7 +578,7 @@ class SYSFSDevice(object):
         self.fw = self.fw.rstrip()
 
         self.port_rate = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
-                                                         str(self.port) + "/rate")
+                                                         self.port + "/rate")
         self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
         if self.state == "down" and config.show_warnings_and_errors is True:
             self.port_rate = self.port_rate + config.warning_sign
@@ -587,7 +587,7 @@ class SYSFSDevice(object):
         self.port_list = self.port_list.split(" ")
 
         self.plid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                    "/ports/" + str(self.port) + "/lid")
+                                                    "/ports/" + self.port + "/lid")
         try:
             self.plid = int(self.plid, 16)
         except ValueError:
@@ -595,7 +595,7 @@ class SYSFSDevice(object):
         self.plid = str(self.plid)
 
         self.smlid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                     "/ports/" + str(self.port) + "/sm_lid")
+                                                     "/ports/" + self.port + "/sm_lid")
         try:
             self.smlid = int(self.smlid, 16)
         except ValueError:
@@ -603,7 +603,7 @@ class SYSFSDevice(object):
         self.smlid = str(self.smlid)
 
         full_guid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                    "/ports/" + str(self.port) + "/gids/0")
+                                                    "/ports/" + self.port + "/gids/0")
 
         self.pguid = extract_string_by_regex(full_guid, "((:[A-Fa-f0-9]{4}){4})$", "").lower()
         self.pguid = re.sub(':', '', self.pguid)
@@ -612,7 +612,7 @@ class SYSFSDevice(object):
         self.ib_net_prefix = re.sub(':', '', self.ib_net_prefix)
 
         self.has_smi = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                       "/ports/" + str(self.port) + "/has_smi")
+                                                       "/ports/" + self.port + "/has_smi")
         self.has_smi = self.has_smi.rstrip()
         if self.link_layer != "IB":
             self.virt_hca = "=N/A="
@@ -652,79 +652,10 @@ class SYSFSDevice(object):
     def __repr__(self):
         delim = " "
         return "SYS device:" + delim +\
-               self.get_bdf() + delim + \
-               self.get_sriov() + delim + \
-               self.get_vf_parent() + delim + \
-               self.get_numa()
-
-    def get_bdf(self):
-        return self.bdf
-
-    def get_sriov(self):
-        return self.sriov
-
-    def get_vf_parent(self):
-        return self.vfParent
-
-    def get_numa(self):
-        return self.numa
-
-    def get_rdma(self):
-        return self.rdma
-
-    def get_net(self):
-        return self.net
-
-    def get_hca_type(self):
-        return self.hca_type
-
-    def get_state(self):
-        return self.state
-
-    def get_phys_state(self):
-        return self.phys_state
-
-    def get_link_layer(self):
-        return self.link_layer
-
-    def get_fw(self):
-        return self.fw
-
-    def get_port_rate(self):
-        return self.port_rate
-
-    def get_port_list(self):
-        return self.port_list
-
-    def get_port(self):
-        return str(self.port)
-
-    def get_plid(self):
-        return self.plid
-
-    def get_smlid(self):
-        return self.smlid
-
-    def get_pguid(self):
-        return self.pguid
-
-    def get_ib_net_prefix(self):
-        return self.ib_net_prefix
-
-    def get_virt_hca(self):
-        return self.virt_hca
-
-    def get_operstate(self):
-        return self.operstate
-
-    def get_gtclass(self):
-        return self.gtclass
-
-    def get_tcp_ecn(self):
-        return self.tcp_ecn
-
-    def get_rdma_cm_tos(self):
-        return self.rdma_cm_tos
+               self.bdf + delim + \
+               self.sriov + delim + \
+               self.vfParent + delim + \
+               self.numa
 
 
 class SAQueryDevice(object):
@@ -819,65 +750,65 @@ class MlnxBFDDevice(object):
         return self.pciDevice.lnkStaWidth
 
     def get_sriov(self):
-        if config.show_warnings_and_errors is True and self.sysFSDevice.get_sriov() == "PF" and \
+        if config.show_warnings_and_errors is True and self.sysFSDevice.sriov == "PF" and \
                 re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.description):
-            return self.sysFSDevice.get_sriov() + config.warning_sign
+            return self.sysFSDevice.sriov + config.warning_sign
         else:
-            return self.sysFSDevice.get_sriov()
+            return self.sysFSDevice.sriov
 
     def get_vf_parent(self):
         return self.sysFSDevice.vfParent
 
     def get_numa(self):
-        return self.sysFSDevice.get_numa()
+        return self.sysFSDevice.numa
 
     def get_rdma(self):
-        return self.sysFSDevice.get_rdma()
+        return self.sysFSDevice.rdma
 
     def get_net(self):
-        return self.sysFSDevice.get_net()
+        return self.sysFSDevice.net
 
     def get_hca_type(self):
-        return self.sysFSDevice.get_hca_type()
+        return self.sysFSDevice.hca_type
 
     def get_state(self):
-        return self.sysFSDevice.get_state()
+        return self.sysFSDevice.state
 
     def get_phys_state(self):
-        return self.sysFSDevice.get_phys_state()
+        return self.sysFSDevice.phys_state
 
     def get_link_layer(self):
-        return self.sysFSDevice.get_link_layer()
+        return self.sysFSDevice.link_layer
 
     def get_fw(self):
-        return self.sysFSDevice.get_fw()
+        return self.sysFSDevice.fw
 
     def get_port_rate(self):
-        return self.sysFSDevice.get_port_rate()
+        return self.sysFSDevice.port_rate
 
     def get_port_list(self):
-        return self.sysFSDevice.get_port_list()
+        return self.sysFSDevice.port_list
 
     def get_port(self):
-        return self.sysFSDevice.get_port()
+        return self.sysFSDevice.port
 
     def get_plid(self):
-        return self.sysFSDevice.get_plid()
+        return self.sysFSDevice.plid
 
     def get_smlid(self):
-        return self.sysFSDevice.get_smlid()
+        return self.sysFSDevice.smlid
 
     def get_pguid(self):
-        return self.sysFSDevice.get_pguid()
+        return self.sysFSDevice.pguid
 
     def get_ib_net_prefix(self):
-        return self.sysFSDevice.get_ib_net_prefix()
+        return self.sysFSDevice.ib_net_prefix
 
     def get_virt_hca(self):
-        return self.sysFSDevice.get_virt_hca()
+        return self.sysFSDevice.virt_hca
 
     def get_operstate(self):
-        return self.sysFSDevice.get_operstate()
+        return self.sysFSDevice.operstate
 
     def get_mst_dev(self):
         return self.mstDevice.get_mst_device()
@@ -895,9 +826,9 @@ class MlnxBFDDevice(object):
         if self.get_link_layer() != "Eth":
             return "N/A"
 
-        if self.sysFSDevice.get_gtclass() == config.lossless_roce_expected_gtclass and \
-           self.sysFSDevice.get_tcp_ecn() == config.lossless_roce_expected_tcp_ecn and \
-           self.sysFSDevice.get_rdma_cm_tos() == config.lossless_roce_expected_rdma_cm_tos and \
+        if self.sysFSDevice.gtclass == config.lossless_roce_expected_gtclass and \
+           self.sysFSDevice.tcp_ecn == config.lossless_roce_expected_tcp_ecn and \
+           self.sysFSDevice.rdma_cm_tos == config.lossless_roce_expected_rdma_cm_tos and \
            self.miscDevice.get_mlnx_qos_trust() == config.lossless_roce_expected_trust and \
            self.miscDevice.get_mlnx_qos_pfc() == config.lossless_roce_expected_pfc:
             return "Lossless"
