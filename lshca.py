@@ -197,13 +197,13 @@ class HCAManager(object):
             if bdf_dev.sriov in ("PF", "PF*"):
                 hca_found = False
                 for hca in self.mlnxHCAs:
-                    if bdf_dev.sn == hca.get_sn():
+                    if bdf_dev.sn == hca.sn:
                         hca_found = True
                         hca.add_bdf_dev(bdf_dev)
 
                 if not hca_found:
                     hca = MlnxHCA(bdf_dev)
-                    hca.set_hca_index(len(self.mlnxHCAs) + 1)
+                    hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
 
         # Now handle all VFs
@@ -829,7 +829,8 @@ class MlnxHCA(object):
         self.sn = bfd_dev.sn
         self.pn = bfd_dev.pn
         self.fw = bfd_dev.fw
-        self.hca_index = None
+        self.description = bfd_dev.description
+        self._hca_index = None
 
     def __repr__(self):
         output = ""
@@ -837,8 +838,13 @@ class MlnxHCA(object):
             output = output + str(bfd_dev)
         return output
 
-    def set_hca_index(self, index):
-        self.hca_index = index
+    @property
+    def hca_index(self):
+        return self._hca_index
+
+    @hca_index.setter
+    def hca_index(self, index):
+        self._hca_index = index
 
     def add_bdf_dev(self, new_bfd_dev):
         if new_bfd_dev.sriov == "VF" and new_bfd_dev.vfParent != "-":
@@ -848,27 +854,12 @@ class MlnxHCA(object):
         else:
             self.bfd_devices.append(new_bfd_dev)
 
-    def get_sn(self):
-        return self.sn
-
-    def get_pn(self):
-        return self.pn
-
-    def get_fw(self):
-        return self.fw
-
-    def get_description(self):
-        return self.bfd_devices[0].description
-
-    def get_hca_index(self):
-        return self.hca_index
-
     def output_info(self):
-        output = {"hca_info": {"SN": self.get_sn(),
-                               "PN": self.get_pn(),
-                               "FW": self.get_fw(),
-                               "Desc": self.get_description(),
-                               "Dev#": self.get_hca_index()},
+        output = {"hca_info": {"SN": self.sn,
+                               "PN": self.pn,
+                               "FW": self.fw,
+                               "Desc": self.description,
+                               "Dev#": self.hca_index},
                   "bdf_devices": []}
         for bdf_dev in self.bfd_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
