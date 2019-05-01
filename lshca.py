@@ -758,15 +758,6 @@ class SAQueryDevice(object):
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
 
-    def get_sw_guid(self):
-        return self.sw_guid
-
-    def get_sw_description(self):
-        return self.sw_description
-
-    def get_sm_guid(self):
-        return self.sm_guid
-
 
 class MiscCMDs(object):
     def __init__(self, net, data_source):
@@ -892,13 +883,13 @@ class MlnxBFDDevice(object):
         return self.mstDevice.get_mst_device()
 
     def get_sw_guid(self):
-        return self.saQueryDevice.get_sw_guid()
+        return self.saQueryDevice.sw_guid
 
     def get_sw_description(self):
-        return self.saQueryDevice.get_sw_description()
+        return self.saQueryDevice.sw_description
 
     def get_sm_guid(self):
-        return self.saQueryDevice.get_sm_guid()
+        return self.saQueryDevice.sm_guid
 
     def get_roce_status(self):
         if self.get_link_layer() != "Eth":
