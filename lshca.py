@@ -457,9 +457,6 @@ class MSTDevice(object):
     def __repr__(self):
         return self.mst_raw_data
 
-    def get_mst_device(self):
-        return self.mst_device
-
 
 class PCIDevice(object):
     def __init__(self, bdf, data_source):
@@ -742,7 +739,7 @@ class MlnxBFDDevice(object):
         self.sn = self.pciDevice.sn
 
         self.mstDevice = MSTDevice(self.bdf, data_source)
-        self.mst_device = self.mstDevice.get_mst_device()
+        self.mst_device = self.mstDevice.mst_device
 
         self.miscDevice = MiscCMDs(self.net, data_source)
 
