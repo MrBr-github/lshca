@@ -186,7 +186,7 @@ class HCAManager(object):
                 bdf_dev = MlnxBFDDevice(bdf, data_source, port_count)
                 mlnx_bdf_devices.append(bdf_dev)
 
-                if port_count >= len(bdf_dev.get_port_list()):
+                if port_count >= len(bdf_dev.port_list):
                     break
 
                 port_count += 1
@@ -194,10 +194,10 @@ class HCAManager(object):
         self.mlnxHCAs = []
         # First handle all PFs
         for bdf_dev in mlnx_bdf_devices:
-            if bdf_dev.get_sriov() in ("PF", "PF*"):
+            if bdf_dev.sriov in ("PF", "PF*"):
                 hca_found = False
                 for hca in self.mlnxHCAs:
-                    if bdf_dev.get_sn() == hca.get_sn():
+                    if bdf_dev.sn == hca.get_sn():
                         hca_found = True
                         hca.add_bdf_dev(bdf_dev)
 
@@ -208,16 +208,16 @@ class HCAManager(object):
 
         # Now handle all VFs
         for bdf_dev in mlnx_bdf_devices:
-            if bdf_dev.get_sriov() == 'VF':
-                vf_parent_bdf = bdf_dev.get_vf_parent()
+            if bdf_dev.sriov == 'VF':
+                vf_parent_bdf = bdf_dev.vfParent
 
                 # TBD: refactor to function
                 for parent_bdf_dev in mlnx_bdf_devices:
                     parent_found = False
-                    if vf_parent_bdf == parent_bdf_dev.get_bdf():
+                    if vf_parent_bdf == parent_bdf_dev.bdf:
                         parent_found = True
 
-                        hca = self.get_hca_by_sn(parent_bdf_dev.get_sn())
+                        hca = self.get_hca_by_sn(parent_bdf_dev.sn)
                         if hca is not None:
                             hca.add_bdf_dev(bdf_dev)
                         else:
@@ -713,117 +713,71 @@ class MiscCMDs(object):
 class MlnxBFDDevice(object):
     def __init__(self, bdf, data_source, port=1):
         self.bdf = bdf
-        self.sysFSDevice = SYSFSDevice(self.bdf, data_source, port)
-        self.pciDevice = PCIDevice(self.bdf, data_source)
-        self.mstDevice = MSTDevice(self.bdf, data_source)
-        self.saQueryDevice = SAQueryDevice(self.get_rdma(), self.get_port(), self.get_plid(), self.get_smlid(),
-                                           data_source)
-        self.miscDevice = MiscCMDs(self.get_net(), data_source)
         self.slaveBDFDevices = []
+
+        self.sysFSDevice = SYSFSDevice(self.bdf, data_source, port)
+        self.fw = self.sysFSDevice.fw
+        self.hca_type = self.sysFSDevice.hca_type
+        self.ib_net_prefix = self.sysFSDevice.ib_net_prefix
+        self.link_layer = self.sysFSDevice.link_layer
+        self.operstate = self.sysFSDevice.operstate
+        self.pguid = self.sysFSDevice.pguid
+        self.port = self.sysFSDevice.port
+        self.port_list = self.sysFSDevice.port_list
+        self.port_rate = self.sysFSDevice.port_rate
+        self.plid = self.sysFSDevice.plid
+        self.net = self.sysFSDevice.net
+        self.numa = self.sysFSDevice.numa
+        self.rdma = self.sysFSDevice.rdma
+        self.smlid = self.sysFSDevice.smlid
+        self.state = self.sysFSDevice.state
+        self.virt_hca = self.sysFSDevice.virt_hca
+        self.vfParent = self.sysFSDevice.vfParent
+
+        self.pciDevice = PCIDevice(self.bdf, data_source)
+        self.description = self.pciDevice.description
+        self.lnkCapWidth = self.pciDevice.lnkCapWidth
+        self.lnkStaWidth = self.pciDevice.lnkStaWidth
+        self.pn = self.pciDevice.pn
+        self.sn = self.pciDevice.sn
+
+        self.mstDevice = MSTDevice(self.bdf, data_source)
+        self.mst_device = self.mstDevice.get_mst_device()
+
+        self.miscDevice = MiscCMDs(self.net, data_source)
+
+        self.saQueryDevice = SAQueryDevice(self.rdma, self.port, self.plid, self.smlid, data_source)
+        self.sw_guid = self.saQueryDevice.sw_guid
+        self.sw_description = self.saQueryDevice.sw_description
+        self.sm_guid = self.saQueryDevice.sm_guid
 
     def __repr__(self):
         return self.sysFSDevice.__repr__() + "\n" + self.pciDevice.__repr__() + "\n" + \
                 self.mstDevice.__repr__() + "\n"
 
+    # Not in use, consider removal
     def add_slave_bdf_device(self, slave_bdf_device):
         self.slaveBDFDevices.append(slave_bdf_device)
 
+    # Not in use, consider removal
     def get_slave_bdf_devices(self):
         return self.slaveBDFDevices
 
-    def get_bdf(self):
-        return self.bdf
+    # Not in use, consider removal
+    def get_phys_state(self):
+        return self.sysFSDevice.phys_state
 
-    def get_sn(self):
-        return self.pciDevice.sn
-
-    def get_pn(self):
-        return self.pciDevice.pn
-
-    def get_description(self):
-        return self.pciDevice.description
-
-    def get_lnk_cap_width(self):
-        return self.pciDevice.lnkCapWidth
-
-    def get_lnk_sta_width(self):
-        return self.pciDevice.lnkStaWidth
-
-    def get_sriov(self):
+    @property
+    def sriov(self):
         if config.show_warnings_and_errors is True and self.sysFSDevice.sriov == "PF" and \
                 re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.description):
             return self.sysFSDevice.sriov + config.warning_sign
         else:
             return self.sysFSDevice.sriov
 
-    def get_vf_parent(self):
-        return self.sysFSDevice.vfParent
-
-    def get_numa(self):
-        return self.sysFSDevice.numa
-
-    def get_rdma(self):
-        return self.sysFSDevice.rdma
-
-    def get_net(self):
-        return self.sysFSDevice.net
-
-    def get_hca_type(self):
-        return self.sysFSDevice.hca_type
-
-    def get_state(self):
-        return self.sysFSDevice.state
-
-    def get_phys_state(self):
-        return self.sysFSDevice.phys_state
-
-    def get_link_layer(self):
-        return self.sysFSDevice.link_layer
-
-    def get_fw(self):
-        return self.sysFSDevice.fw
-
-    def get_port_rate(self):
-        return self.sysFSDevice.port_rate
-
-    def get_port_list(self):
-        return self.sysFSDevice.port_list
-
-    def get_port(self):
-        return self.sysFSDevice.port
-
-    def get_plid(self):
-        return self.sysFSDevice.plid
-
-    def get_smlid(self):
-        return self.sysFSDevice.smlid
-
-    def get_pguid(self):
-        return self.sysFSDevice.pguid
-
-    def get_ib_net_prefix(self):
-        return self.sysFSDevice.ib_net_prefix
-
-    def get_virt_hca(self):
-        return self.sysFSDevice.virt_hca
-
-    def get_operstate(self):
-        return self.sysFSDevice.operstate
-
-    def get_mst_dev(self):
-        return self.mstDevice.get_mst_device()
-
-    def get_sw_guid(self):
-        return self.saQueryDevice.sw_guid
-
-    def get_sw_description(self):
-        return self.saQueryDevice.sw_description
-
-    def get_sm_guid(self):
-        return self.saQueryDevice.sm_guid
-
-    def get_roce_status(self):
-        if self.get_link_layer() != "Eth":
+    @property
+    def roce_status(self):
+        if self.link_layer != "Eth":
             return "N/A"
 
         if self.sysFSDevice.gtclass == config.lossless_roce_expected_gtclass and \
@@ -836,33 +790,33 @@ class MlnxBFDDevice(object):
             return "Lossy"
 
     def output_info(self):
-        if self.get_sriov() in ("PF", "PF*"):
-            sriov = self.get_sriov() + "  "
+        if self.sriov in ("PF", "PF*"):
+            sriov = self.sriov + "  "
         else:
-            sriov = "  " + self.get_sriov()
+            sriov = "  " + self.sriov
         output = {"SRIOV": sriov,
-                  "Numa": self.get_numa(),
-                  "PCI_addr": self.get_bdf(),
-                  "Parent_addr": self.get_vf_parent(),
-                  "RDMA": self.get_rdma(),
-                  "Net": self.get_net(),
-                  "HCA_Type": self.get_hca_type(),
-                  "State": self.get_state(),
-                  "Rate": self.get_port_rate(),
-                  "Port": self.get_port(),
-                  "Link": self.get_link_layer(),
-                  "MST_device": self.get_mst_dev(),
-                  "LnkCapWidth": self.get_lnk_cap_width(),
-                  "LnkStaWidth": self.get_lnk_sta_width(),
-                  "PLid": self.get_plid(),
-                  "PGuid": self.get_pguid(),
-                  "IbNetPref": self.get_ib_net_prefix(),
-                  "SMGuid": self.get_sm_guid(),
-                  "SwGuid": self.get_sw_guid(),
-                  "SwDescription": self.get_sw_description(),
-                  "VrtHCA": self.get_virt_hca(),
-                  "Operstate": self.get_operstate(),
-                  "RoCEstat": self.get_roce_status()}
+                  "Numa": self.numa,
+                  "PCI_addr": self.bdf,
+                  "Parent_addr": self.vfParent,
+                  "RDMA": self.rdma,
+                  "Net": self.net,
+                  "HCA_Type": self.hca_type,
+                  "State": self.state,
+                  "Rate": self.port_rate,
+                  "Port": self.port,
+                  "Link": self.link_layer,
+                  "MST_device": self.mst_device,
+                  "LnkCapWidth": self.lnkCapWidth,
+                  "LnkStaWidth": self.lnkStaWidth,
+                  "PLid": self.plid,
+                  "PGuid": self.pguid,
+                  "IbNetPref": self.ib_net_prefix,
+                  "SMGuid": self.sm_guid,
+                  "SwGuid": self.sw_guid,
+                  "SwDescription": self.sw_description,
+                  "VrtHCA": self.virt_hca,
+                  "Operstate": self.operstate,
+                  "RoCEstat": self.roce_status}
         return output
 
 
@@ -870,14 +824,14 @@ class MlnxHCA(object):
     def __init__(self, bfd_dev):
         self.bfd_devices = []
 
-        if bfd_dev.get_sriov() in ("PF", "PF*"):
+        if bfd_dev.sriov in ("PF", "PF*"):
             self.bfd_devices.append(bfd_dev)
         else:
             raise ValueError("MlnxHCA object can be initialised ONLY with PF bfdDev")
 
-        self.sn = bfd_dev.get_sn()
-        self.pn = bfd_dev.get_pn()
-        self.fw = bfd_dev.get_fw()
+        self.sn = bfd_dev.sn
+        self.pn = bfd_dev.pn
+        self.fw = bfd_dev.fw
         self.hca_index = None
 
     def __repr__(self):
@@ -890,9 +844,9 @@ class MlnxHCA(object):
         self.hca_index = index
 
     def add_bdf_dev(self, new_bfd_dev):
-        if new_bfd_dev.get_sriov() == "VF" and new_bfd_dev.get_vf_parent() != "-":
+        if new_bfd_dev.sriov == "VF" and new_bfd_dev.vfParent != "-":
             for i, bfd_dev in enumerate(self.bfd_devices):
-                if bfd_dev.get_bdf() == new_bfd_dev.get_vf_parent():
+                if bfd_dev.bdf == new_bfd_dev.vfParent:
                     self.bfd_devices.insert(i+1, new_bfd_dev)
         else:
             self.bfd_devices.append(new_bfd_dev)
@@ -907,7 +861,7 @@ class MlnxHCA(object):
         return self.fw
 
     def get_description(self):
-        return self.bfd_devices[0].get_description()
+        return self.bfd_devices[0].description
 
     def get_hca_index(self):
         return self.hca_index
