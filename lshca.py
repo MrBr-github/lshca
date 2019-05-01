@@ -236,7 +236,7 @@ class HCAManager(object):
 
     def get_hca_by_sn(self, sn):
         for hca in self.mlnxHCAs:
-            if sn == hca.get_sn():
+            if sn == hca.sn:
                 return hca
         return None
 
