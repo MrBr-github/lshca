@@ -470,7 +470,7 @@ class PCIDevice(object):
         # 0000:01:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
         self.description = self.get_info_from_lspci_data("^[0-9].*", str(self.bdf) + ".*:(.+)")
         self.sn = self.get_info_from_lspci_data("\[SN\].*", ".*:(.+)")
-        self.pn = self.get_info_from_lspci_data("\[PN\].*", ".*:(.+)")
+        self._pn = self.get_info_from_lspci_data("\[PN\].*", ".*:(.+)")
         self.revision = self.get_info_from_lspci_data("\[EC\].*", ".*:(.+)")
         self.lnkCapWidth = self.get_info_from_lspci_data("LnkCap:.*Width.*", ".*Width (x[0-9]+)")
         self.lnkStaWidth = self.get_info_from_lspci_data("LnkSta:.*Width.*", ".*Width (x[0-9]+)")
@@ -485,31 +485,17 @@ class PCIDevice(object):
     def __repr__(self):
         delim = " "
         return "PCI device:" + delim +\
-               self.get_bdf() + delim + \
-               self.get_sn() + delim + \
-               self.get_pn() + delim +\
+               self.bdf + delim + \
+               self.sn + delim + \
+               self.pn + delim +\
                "\"" + self.description + "\""
 
-    def get_bdf(self):
-        return self.bdf
-
-    def get_sn(self):
-        return self.sn
-
-    def get_pn(self):
+    @property
+    def pn(self):
         if self.revision != "=N/A=":
-            return self.pn + "  rev. " + self.revision
+            return self._pn + "  rev. " + self.revision
         else:
-            return self.pn
-
-    def get_description(self):
-        return self.description
-
-    def get_lnk_cap_width(self):
-        return self.lnkCapWidth
-
-    def get_lnk_sta_width(self):
-        return self.lnkStaWidth
+            return self._pn
 
     def get_info_from_lspci_data(self, search_regex, output_regex):
         search_result = find_in_list(self.data, search_regex)
@@ -827,23 +813,23 @@ class MlnxBFDDevice(object):
         return self.bdf
 
     def get_sn(self):
-        return self.pciDevice.get_sn()
+        return self.pciDevice.sn
 
     def get_pn(self):
-        return self.pciDevice.get_pn()
+        return self.pciDevice.pn
 
     def get_description(self):
-        return self.pciDevice.get_description()
+        return self.pciDevice.description
 
     def get_lnk_cap_width(self):
-        return self.pciDevice.get_lnk_cap_width()
+        return self.pciDevice.lnkCapWidth
 
     def get_lnk_sta_width(self):
-        return self.pciDevice.get_lnk_sta_width()
+        return self.pciDevice.lnkStaWidth
 
     def get_sriov(self):
         if config.show_warnings_and_errors is True and self.sysFSDevice.get_sriov() == "PF" and \
-                re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.get_description()):
+                re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.description):
             return self.sysFSDevice.get_sriov() + config.warning_sign
         else:
             return self.sysFSDevice.get_sriov()
