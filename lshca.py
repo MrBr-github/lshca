@@ -775,9 +775,9 @@ class MlnxBFDDevice(object):
 
     @property
     def sriov(self):
-        if config.show_warnings_and_errors is True and self.sysFSDevice.sriov == "PF" and \
+        if self.config.show_warnings_and_errors is True and self.sysFSDevice.sriov == "PF" and \
                 re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.description):
-            return self.sysFSDevice.sriov + config.warning_sign
+            return self.sysFSDevice.sriov + self.config.warning_sign
         else:
             return self.sysFSDevice.sriov
 
@@ -883,7 +883,8 @@ class DataSource(object):
             if not os.path.exists(self.config.record_dir):
                 os.makedirs(self.config.record_dir)
 
-                self.config.record_tar_file = self.config.record_dir + "/" + os.uname()[1] + "--" + str(time.time()) + ".tar"
+                self.config.record_tar_file = "%s/%s--%s.tar" % (self.config.record_dir, os.uname()[1],
+                                                                 str(time.time()))
 
             print "\nlshca started data recording"
             print "output saved in " + self.config.record_tar_file + " file\n"
