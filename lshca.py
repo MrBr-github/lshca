@@ -78,7 +78,7 @@ class Config(object):
         parser.add_argument('-d', action='store_true', dest="debug", help="run with debug outputs")
         parser.add_argument('-j', action='store_true', dest="json",
                             help="output data as JSON, affected by output selection flag")
-        parser.add_argument('-v', '--version', action='version', version=str('%(prog)s ver. ' + config.ver))
+        parser.add_argument('-v', '--version', action='version', version=str('%(prog)s ver. ' + self.ver))
         parser.add_argument('-m', choices=["normal", "record"], default="normal", dest="mode",
                             help=textwrap.dedent('''\
                             mode of operation (default: %(default)s):
@@ -127,27 +127,27 @@ class Config(object):
     def process_arguments(self, args):
         # if output not to terminal
         if sys.stdout.isatty() is False and self.override__set_tty_exists is False:
-            config.show_warnings_and_errors = False
+            self.show_warnings_and_errors = False
 
         if args.mode == "record":
-            config.record_data_for_debug = True
+            self.record_data_for_debug = True
 
         if args.debug:
-            config.debug = True
+            self.debug = True
 
         if args.view == "ib":
-            config.saquery_device_enabled = True
-            config.output_view = "ib"
+            self.saquery_device_enabled = True
+            self.output_view = "ib"
         elif args.view == "roce":
-            config.output_view = "roce"
+            self.output_view = "roce"
         elif args.view == "system":
-            config.output_view = "system"
+            self.output_view = "system"
 
-        config.output_order = config.output_order_general[config.output_view]
+        self.output_order = self.output_order_general[self.output_view]
 
         if args.json:
-            config.output_format = "json"
-            config.show_warnings_and_errors = False
+            self.output_format = "json"
+            self.show_warnings_and_errors = False
 
         if args.sources:
             for data_source in args.sources:
@@ -156,19 +156,20 @@ class Config(object):
                 elif data_source == "sysfs":
                     pass
                 elif data_source == "mst":
-                    config.mst_device_enabled = True
+                    self.mst_device_enabled = True
                 elif data_source == "saquery":
-                    config.saquery_device_enabled = True
+                    self.saquery_device_enabled = True
 
         if args.output_fields_filter:
-            config.select_output_filter = args.output_fields_filter
+            self.select_output_filter = args.output_fields_filter
 
         if args.output_fields_value_filter:
-            config.where_output_filter = args.output_fields_value_filter
+            self.where_output_filter = args.output_fields_value_filter
 
 
 class HCAManager(object):
-    def __init__(self, data_source):
+    def __init__(self, data_source, config):
+        self.config = config
         mlnx_bdf_list = []
         # Same lspci cmd used in MST source in order to benefit from cache
         raw_mlnx_bdf_list = data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
@@ -183,7 +184,7 @@ class HCAManager(object):
             port_count = 1
 
             while True:
-                bdf_dev = MlnxBFDDevice(bdf, data_source, port_count)
+                bdf_dev = MlnxBFDDevice(bdf, data_source, self.config, port_count)
                 mlnx_bdf_devices.append(bdf_dev)
 
                 if port_count >= len(bdf_dev.port_list):
@@ -227,7 +228,7 @@ class HCAManager(object):
                         break
 
     def display_hcas_info(self):
-        out = Output()
+        out = Output(self.config)
         for hca in self.mlnxHCAs:
             output_info = hca.output_info()
             out.append(output_info)
@@ -242,22 +243,23 @@ class HCAManager(object):
 
 
 class Output(object):
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.output = []
         self.column_width = {}
         self.separator_len = 0
         self.output_filter = {}
-        self.output_order = config.output_order
+        self.output_order = self.config.output_order
 
     def append(self, data):
         self.output.append(data)
 
     def apply_select_output_filters(self):
-        if config.select_output_filter:
+        if self.config.select_output_filter:
             decrement_list = self.output_order
             increment_list = []
 
-            output_filter = config.select_output_filter
+            output_filter = self.config.select_output_filter
             for item in output_filter:
                 if re.match(r"^!.+", item):
                     item = item[1:]
@@ -283,10 +285,10 @@ class Output(object):
                     bdf_device.pop(key, None)
 
     def apply_where_output_filters(self):
-        if not config.where_output_filter:
+        if not self.config.where_output_filter:
             return
 
-        output_filter = dict(item.split("=") for item in config.where_output_filter)
+        output_filter = dict(item.split("=") for item in self.config.where_output_filter)
         for filter_key in output_filter:
             output_filter[filter_key] = re.compile(output_filter[filter_key])
 
@@ -317,7 +319,7 @@ class Output(object):
     def print_output(self):
         self.filter_out_data()
 
-        if config.output_format == "human_readable":
+        if self.config.output_format == "human_readable":
             hca_info_line_width = 0
 
             for output_key in self.output:
@@ -346,7 +348,7 @@ class Output(object):
             for output_key in self.output:
                 self.print_hca_info(output_key["hca_info"])
                 self.print_bdf_devices(output_key["bdf_devices"])
-        elif config.output_format == "json":
+        elif self.config.output_format == "json":
             print json.dumps(self.output, indent=4, sort_keys=True)
 
     def print_hca_info(self, args):
@@ -402,16 +404,17 @@ class Output(object):
 
 
 class MSTDevice(object):
-    def __init__(self, bdf, data_source):
+    def __init__(self, bdf, data_source, config):
         self.bdf = bdf
+        self.config = config
         self.mst_device = ""
         self.mst_raw_data = "No MST data"
         self.bdf_short_format = True
         mst_init_running = False
 
-        if config.mst_device_enabled:
-            if "MST_device" not in config.output_order:
-                config.output_order.append("MST_device")
+        if self.config.mst_device_enabled:
+            if "MST_device" not in self.config.output_order:
+                self.config.output_order.append("MST_device")
 
             result = data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
             if result == ["0"]:
@@ -452,15 +455,16 @@ class MSTDevice(object):
             else:
                 print >> sys.stderr, "\n\nError: MST tool is missing\n\n"
                 # Disable further use.access to mst device
-                config.mst_device_enabled = False
+                self.config.mst_device_enabled = False
 
     def __repr__(self):
         return self.mst_raw_data
 
 
 class PCIDevice(object):
-    def __init__(self, bdf, data_source):
+    def __init__(self, bdf, data_source, config):
         self.bdf = bdf
+        self.config = config
         self.bdWithoutF = self.bdf.split(".", 1)[0]
         self.data = data_source.exec_shell_cmd("lspci -vvvD -s" + bdf, use_cache=True)
         # Handling following string, taking reset of string after HCA type
@@ -474,8 +478,8 @@ class PCIDevice(object):
         self.pciGen = self.get_info_from_lspci_data(".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn].*",
                                                     ".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn]([0-9]) +")
 
-        if self.lnkCapWidth != self.lnkStaWidth and config.show_warnings_and_errors is True:
-            self.lnkStaWidth = str(self.lnkStaWidth) + config.error_sign
+        if self.lnkCapWidth != self.lnkStaWidth and self.config.show_warnings_and_errors is True:
+            self.lnkStaWidth = str(self.lnkStaWidth) + self.config.error_sign
 
         self.lnkCapWidth = str(self.lnkCapWidth) + " G" + str(self.pciGen)
 
@@ -501,9 +505,10 @@ class PCIDevice(object):
 
 
 class SYSFSDevice(object):
-    def __init__(self, bdf, data_source, port=1):
+    def __init__(self, bdf, data_source, config, port=1):
         self.bdf = bdf
         self.port = str(port)
+        self.config = config
 
         sys_prefix = "/sys/bus/pci/devices/" + self.bdf
 
@@ -577,8 +582,8 @@ class SYSFSDevice(object):
         self.port_rate = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
                                                          self.port + "/rate")
         self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
-        if self.state == "down" and config.show_warnings_and_errors is True:
-            self.port_rate = self.port_rate + config.warning_sign
+        if self.state == "down" and self.config.show_warnings_and_errors is True:
+            self.port_rate = self.port_rate + self.config.warning_sign
 
         self.port_list = data_source.list_dir_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/").rstrip()
         self.port_list = self.port_list.split(" ")
@@ -626,7 +631,7 @@ class SYSFSDevice(object):
         self.tcp_ecn = None
         self.rdma_cm_tos = None
 
-        if config.output_view == "roce":
+        if self.config.output_view == "roce":
             self.operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
 
             self.gtclass = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
@@ -656,18 +661,19 @@ class SYSFSDevice(object):
 
 
 class SAQueryDevice(object):
-    def __init__(self, rdma, port, plid, smlid, data_source):
+    def __init__(self, rdma, port, plid, smlid, data_source, config):
         self.sw_guid = ""
         self.sw_description = ""
         self.sm_guid = ""
+        self.config = config
 
-        if config.saquery_device_enabled:
-            if "SMGuid" not in config.output_order:
-                config.output_order.append("SMGuid")
-            if "SwGuid" not in config.output_order:
-                config.output_order.append("SwGuid")
-            if "SwDescription" not in config.output_order:
-                config.output_order.append("SwDescription")
+        if self.config.saquery_device_enabled:
+            if "SMGuid" not in self.config.output_order:
+                self.config.output_order.append("SMGuid")
+            if "SwGuid" not in self.config.output_order:
+                self.config.output_order.append("SwGuid")
+            if "SwDescription" not in self.config.output_order:
+                self.config.output_order.append("SwDescription")
 
             self.data = data_source.exec_shell_cmd("saquery LR -C " + rdma + " -P " + port + " " + plid)
             self.sw_lid = self.get_info_from_saquery_data(".*ToLID.*", "\.+([0-9]+)")
@@ -688,9 +694,10 @@ class SAQueryDevice(object):
 
 
 class MiscCMDs(object):
-    def __init__(self, net, data_source):
+    def __init__(self, net, data_source, config):
         self.data_source = data_source
         self.net = net
+        self.config = config
 
     def get_mlnx_qos_trust(self):
         data = self.data_source.exec_shell_cmd("mlnx_qos -i " + self.net, use_cache=True)
@@ -708,11 +715,12 @@ class MiscCMDs(object):
 
 
 class MlnxBFDDevice(object):
-    def __init__(self, bdf, data_source, port=1):
+    def __init__(self, bdf, data_source, config, port=1):
         self.bdf = bdf
+        self.config = config
         self.slaveBDFDevices = []
 
-        self.sysFSDevice = SYSFSDevice(self.bdf, data_source, port)
+        self.sysFSDevice = SYSFSDevice(self.bdf, data_source, self.config, port)
         self.fw = self.sysFSDevice.fw
         self.hca_type = self.sysFSDevice.hca_type
         self.ib_net_prefix = self.sysFSDevice.ib_net_prefix
@@ -731,19 +739,20 @@ class MlnxBFDDevice(object):
         self.virt_hca = self.sysFSDevice.virt_hca
         self.vfParent = self.sysFSDevice.vfParent
 
-        self.pciDevice = PCIDevice(self.bdf, data_source)
+        self.pciDevice = PCIDevice(self.bdf, data_source, self.config)
         self.description = self.pciDevice.description
         self.lnkCapWidth = self.pciDevice.lnkCapWidth
         self.lnkStaWidth = self.pciDevice.lnkStaWidth
         self.pn = self.pciDevice.pn
         self.sn = self.pciDevice.sn
 
-        self.mstDevice = MSTDevice(self.bdf, data_source)
+        self.mstDevice = MSTDevice(self.bdf, data_source, self.config)
         self.mst_device = self.mstDevice.mst_device
 
-        self.miscDevice = MiscCMDs(self.net, data_source)
+        self.miscDevice = MiscCMDs(self.net, data_source, self.config)
 
-        self.saQueryDevice = SAQueryDevice(self.rdma, self.port, self.plid, self.smlid, data_source)
+        self.saQueryDevice = SAQueryDevice(self.rdma, self.port, self.plid, self.smlid,
+                                           data_source, self.config)
         self.sw_guid = self.saQueryDevice.sw_guid
         self.sw_description = self.saQueryDevice.sw_description
         self.sm_guid = self.saQueryDevice.sm_guid
@@ -777,11 +786,11 @@ class MlnxBFDDevice(object):
         if self.link_layer != "Eth":
             return "N/A"
 
-        if self.sysFSDevice.gtclass == config.lossless_roce_expected_gtclass and \
-           self.sysFSDevice.tcp_ecn == config.lossless_roce_expected_tcp_ecn and \
-           self.sysFSDevice.rdma_cm_tos == config.lossless_roce_expected_rdma_cm_tos and \
-           self.miscDevice.get_mlnx_qos_trust() == config.lossless_roce_expected_trust and \
-           self.miscDevice.get_mlnx_qos_pfc() == config.lossless_roce_expected_pfc:
+        if self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass and \
+           self.sysFSDevice.tcp_ecn == self.config.lossless_roce_expected_tcp_ecn and \
+           self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos and \
+           self.miscDevice.get_mlnx_qos_trust() == self.config.lossless_roce_expected_trust and \
+           self.miscDevice.get_mlnx_qos_pfc() == self.config.lossless_roce_expected_pfc:
             return "Lossless"
         else:
             return "Lossy"
@@ -867,29 +876,30 @@ class MlnxHCA(object):
 
 
 class DataSource(object):
-    def __init__(self):
+    def __init__(self, config):
         self.cache = {}
-        if config.record_data_for_debug is True:
-            if not os.path.exists(config.record_dir):
-                os.makedirs(config.record_dir)
+        self.config = config
+        if self.config.record_data_for_debug is True:
+            if not os.path.exists(self.config.record_dir):
+                os.makedirs(self.config.record_dir)
 
-            config.record_tar_file = config.record_dir + "/" + os.uname()[1] + "--" + str(time.time()) + ".tar"
+                self.config.record_tar_file = self.config.record_dir + "/" + os.uname()[1] + "--" + str(time.time()) + ".tar"
 
             print "\nlshca started data recording"
-            print "output saved in " + config.record_tar_file + " file\n"
+            print "output saved in " + self.config.record_tar_file + " file\n"
 
             self.stdout = StringIO.StringIO()
             sys.stdout = self.stdout
 
     def __del__(self):
-        if config.record_data_for_debug is True:
+        if self.config.record_data_for_debug is True:
             sys.stdout = sys.__stdout__
             self.record_data("cmd", "lshca " + " ".join(sys.argv[1:]))
             self.record_data("output", self.stdout.getvalue())
 
-            config.record_data_for_debug = False
+            self.config.record_data_for_debug = False
             environment = list()
-            environment.append("LSHCA: " + config.ver)
+            environment.append("LSHCA: " + self.config.ver)
             environment.append("OFED: " + " ".join(self.exec_shell_cmd("ofed_info -s")))
             environment.append("MST:  " + " ".join(self.exec_shell_cmd("mst version")))
             environment.append("Uname:  " + " ".join(self.exec_shell_cmd("uname -a")))
@@ -910,7 +920,7 @@ class DataSource(object):
                 self.cache.update({cache_key: output})
 
         output = output.splitlines()
-        if config.record_data_for_debug is True:
+        if self.config.record_data_for_debug is True:
             cmd = "shell.cmd/" + cmd
             self.record_data(cmd, output)
 
@@ -925,7 +935,7 @@ class DataSource(object):
         tarinfo.size = len(p_output)
         tarinfo.mtime = time.time()
 
-        tar = tarfile.open(name=config.record_tar_file, mode='a')
+        tar = tarfile.open(name=self.config.record_tar_file, mode='a')
         tar.addfile(tarinfo, StringIO.StringIO(p_output))
         tar.close()
 
@@ -937,7 +947,7 @@ class DataSource(object):
         else:
             output = ""
 
-        if config.record_data_for_debug is True:
+        if self.config.record_data_for_debug is True:
             cmd = "os.path.exists" + file_to_read
             self.record_data(cmd, output)
 
@@ -953,7 +963,7 @@ class DataSource(object):
             else:
                 raise exception
 
-        if config.record_data_for_debug is True:
+        if self.config.record_data_for_debug is True:
             cmd = "os.readlink" + link_to_read
             self.record_data(cmd, output)
 
@@ -970,7 +980,7 @@ class DataSource(object):
             else:
                 raise exception
 
-        if config.record_data_for_debug is True:
+        if self.config.record_data_for_debug is True:
             cmd = "os.listdir" + dir_to_list.rstrip('/') + "_dir"
             self.record_data(cmd, output)
 
@@ -1003,18 +1013,16 @@ def find_in_list(list_to_search_in, regex_pattern):
         return ""
 
 
-config = Config()
-
-
 def main():
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script")
 
+    config = Config()
     config.parse_arguments(sys.argv[1:])
 
-    data_source = DataSource()
+    data_source = DataSource(config)
 
-    hca_manager = HCAManager(data_source)
+    hca_manager = HCAManager(data_source, config)
 
     hca_manager.display_hcas_info()
 
