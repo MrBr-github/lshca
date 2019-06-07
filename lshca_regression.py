@@ -4,12 +4,12 @@ from lshca import *
 import tempfile
 import shutil
 import difflib
+import traceback
 
 
 class DataSourceRecorded(DataSource):
-    @staticmethod
-    def read_cmd_output_from_file(cmd_prefix, cmd):
-        file_to_read = config.record_dir + cmd_prefix + cmd
+    def read_cmd_output_from_file(self, cmd_prefix, cmd):
+        file_to_read = self.config.record_dir + cmd_prefix + cmd
         f = open(file_to_read, "rb")
         output = pickle.load(f)
         return output
@@ -47,15 +47,16 @@ def main(tmp_dir_name, recorder_sys_argv):
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script")
 
+    config = Config()
+
     # Comes to handle missing TTY during regression
     config.override__set_tty_exists = True
     config.parse_arguments(recorder_sys_argv[1:])
     config.record_data_for_debug = False
     config.record_dir = tmp_dir_name
+    data_source = DataSourceRecorded(config)
 
-    data_source = DataSourceRecorded()
-
-    hca_manager = HCAManager(data_source)
+    hca_manager = HCAManager(data_source, config)
 
     hca_manager.display_hcas_info()
 
@@ -92,11 +93,13 @@ def regression():
 
             stdout = StringIO.StringIO()
             sys.stdout = stdout
+            trace_back = ""
             try:
                 main(tmp_dir_name, recorder_sys_argv)
                 output = stdout
             except Exception as e:
                 output = e
+                trace_back = traceback.format_exc()
             finally:
                 sys.stdout = sys.__stdout__
 
@@ -108,6 +111,9 @@ def regression():
             except AttributeError:
                 regression_run_succseeded = False
                 print "Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + "\n"
+                print "==>  Traceback   <=="
+                print trace_back
+                print "==>   Error   <=="
                 print output
                 continue
 
