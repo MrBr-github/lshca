@@ -27,7 +27,8 @@ class Config(object):
         self.output_view = "system"
         self.output_order_general = {
                     "system": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
-                               "Link", "Rate", "SRIOV", "Parent_addr", "LnkCapWidth", "LnkStaWidth", "HCA_Type"],
+                               "Link", "Rate", "SRIOV", "Parent_addr","Tempr", "LnkCapWidth", "LnkStaWidth",
+                               "HCA_Type"],
                     "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "VrtHCA", "PLid",
                            "PGuid", "IbNetPref"],
                     "roce": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
@@ -694,9 +695,10 @@ class SAQueryDevice(object):
 
 
 class MiscCMDs(object):
-    def __init__(self, net, data_source, config):
+    def __init__(self, net, rdma, data_source, config):
         self.data_source = data_source
         self.net = net
+        self.rdma = rdma
         self.config = config
 
     def get_mlnx_qos_trust(self):
@@ -712,6 +714,20 @@ class MiscCMDs(object):
         search_result = find_in_list(data, regex)
         search_result = extract_string_by_regex(search_result, regex).replace(" ", "")
         return search_result
+
+    def get_tempr(self):
+        data = self.data_source.exec_shell_cmd("mget_temp -d " + self.rdma, use_cache=True)
+        regex = '^([0-9]+)\s+$'
+        search_result = find_in_list(data, regex)
+        search_result = extract_string_by_regex(search_result, regex).replace(" ", "")
+        try:
+            if int(search_result) > 90:
+                return search_result + self.config.error_sign
+            elif int(search_result) > 60:
+                return search_result + self.config.warning_sign
+            return search_result
+        except ValueError:
+            return "=N/A="
 
 
 class MlnxBFDDevice(object):
@@ -749,7 +765,8 @@ class MlnxBFDDevice(object):
         self.mstDevice = MSTDevice(self.bdf, data_source, self.config)
         self.mst_device = self.mstDevice.mst_device
 
-        self.miscDevice = MiscCMDs(self.net, data_source, self.config)
+        self.miscDevice = MiscCMDs(self.net, self.rdma, data_source, self.config)
+        self.tempr = self.miscDevice.get_tempr()
 
         self.saQueryDevice = SAQueryDevice(self.rdma, self.port, self.plid, self.smlid,
                                            data_source, self.config)
@@ -822,7 +839,8 @@ class MlnxBFDDevice(object):
                   "SwDescription": self.sw_description,
                   "VrtHCA": self.virt_hca,
                   "Operstate": self.operstate,
-                  "RoCEstat": self.roce_status}
+                  "RoCEstat": self.roce_status,
+                  "Tempr": self.tempr}
         return output
 
 
