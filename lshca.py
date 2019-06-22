@@ -726,7 +726,7 @@ class MiscCMDs(object):
         try:
             if int(search_result) > 90:
                 return search_result + self.config.error_sign
-            elif int(search_result) > 60:
+            elif int(search_result) > 80:
                 return search_result + self.config.warning_sign
             return search_result
         except ValueError:
