@@ -50,7 +50,8 @@ class Config(object):
         self.saquery_device_enabled = False
 
         self.output_format = "human_readable"
-        self.select_output_filter = ""
+        self.output_fields_filter_positive = ""
+        self.output_fields_filter_negative = ""
         self.where_output_filter = ""
 
         self.lossless_roce_expected_trust = "dscp"
@@ -104,10 +105,14 @@ class Config(object):
                               mst      - provides MST based info. This data source slows execution  
                               saquery  - provides SA query based info of the IB network
                             '''))
-        parser.add_argument('-o', dest="output_fields_filter", nargs="+",
+        parser.add_argument('-o', dest="output_fields_filter_positive", nargs="+",
                             help=textwrap.dedent('''\
                             SELECT fields to output (comma delimited list). Use field names as they appear in output
-                            adding \"-\" to field name will remove it from default selections
+                            '''))
+        parser.add_argument('-onot', dest="output_fields_filter_negative", nargs="+",
+                            help=textwrap.dedent('''\
+                            REMOVE fields from default output (comma delimited list).
+                            Use field names as they appear in output. -o takes precedence
                             '''))
         parser.add_argument('-ow', dest="output_fields_value_filter", nargs='+',
                             help=textwrap.dedent('''\
@@ -161,8 +166,11 @@ class Config(object):
                 elif data_source == "saquery":
                     self.saquery_device_enabled = True
 
-        if args.output_fields_filter:
-            self.select_output_filter = args.output_fields_filter
+        if args.output_fields_filter_positive:
+            self.output_fields_filter_positive = args.output_fields_filter_positive
+
+        if args.output_fields_filter_negative:
+            self.output_fields_filter_negative = args.output_fields_filter_negative
 
         if args.output_fields_value_filter:
             self.where_output_filter = args.output_fields_value_filter
@@ -256,23 +264,18 @@ class Output(object):
         self.output.append(data)
 
     def apply_select_output_filters(self):
-        if self.config.select_output_filter:
+
+        if len(self.config.output_fields_filter_positive) > 0:
+            self.output_order = self.config.output_fields_filter_positive
+        elif len(self.config.output_fields_filter_negative) > 0:
             decrement_list = self.output_order
-            increment_list = []
 
-            output_filter = self.config.select_output_filter
+            output_filter = self.config.output_fields_filter_negative
             for item in output_filter:
-                if re.match(r"^!.+", item):
-                    item = item[1:]
-                    if item in self.output_order:
-                        decrement_list.remove(item)
-                else:
-                    increment_list.append(item)
+                if item in self.output_order:
+                    decrement_list.remove(item)
 
-            if len(increment_list) > 0:
-                self.output_order = increment_list
-            else:
-                self.output_order = decrement_list
+            self.output_order = decrement_list
 
         data_keys_remove_list = []
         if len(self.output) > 0:
