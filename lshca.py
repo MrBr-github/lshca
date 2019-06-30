@@ -842,8 +842,7 @@ class MlnxBFDDevice(object):
                   "SwDescription": self.sw_description,
                   "VrtHCA": self.virt_hca,
                   "Operstate": self.operstate,
-                  "RoCEstat": self.roce_status,
-                  "Tempr": self.tempr}
+                  "RoCEstat": self.roce_status}
         return output
 
 
@@ -860,6 +859,7 @@ class MlnxHCA(object):
         self.pn = bfd_dev.pn
         self.fw = bfd_dev.fw
         self.description = bfd_dev.description
+        self.tempr = bfd_dev.tempr
         self._hca_index = None
 
     def __repr__(self):
@@ -889,6 +889,7 @@ class MlnxHCA(object):
                                "PN": self.pn,
                                "FW": self.fw,
                                "Desc": self.description,
+                               "Tempr": self.tempr,
                                "Dev#": self.hca_index},
                   "bdf_devices": []}
         for bdf_dev in self.bfd_devices:
