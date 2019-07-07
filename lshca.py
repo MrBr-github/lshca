@@ -77,6 +77,8 @@ class Config(object):
 
                         '''))
 
+        parser.add_argument('-hh', action='store_true', dest="extended_help",
+                            help="show extended help message and exit. All fields description and more")
         parser.add_argument('-d', action='store_true', dest="debug", help="run with debug outputs")
         parser.add_argument('-j', action='store_true', dest="json",
                             help="output data as JSON, affected by output selection flag")
@@ -174,6 +176,66 @@ class Config(object):
 
         if args.output_fields_value_filter:
             self.where_output_filter = args.output_fields_value_filter
+
+        if args.extended_help:
+            self.extended_help()
+
+    @staticmethod
+    def extended_help():
+        print textwrap.dedent("""
+        Detailed fields description.
+        Note: BFD is a Bus-Device-Function PCI address. Each HCA port/vf has unique BFD.
+
+        HCA header:
+          Dev   - Device number. Enumerated value padded with #
+          Desc  - HCA description as appears in lspci output
+          FW    - HCA currently running firmware version
+          PN    - HCA part number including revision
+          SN    - HCA serial number
+          Tempr - HCA temperature. Based on mget_temp utility from MFT
+
+        BDF devices:
+         Generic
+          Net       - Network interface name, as appears in "ip link show"
+          Numa      - NUMA affinity
+          PCI_addr  - PCI address (BFD)
+          Port      - Channel Adapter (ca_port, not related to physical port). On most mlx5 devices port is 1
+          RDMA      - Channel Adapter name (ca_name)
+          State     - Port state. Possible values:
+                        actv - port active
+                        init - port initializing
+                        down - port down
+
+         System view
+          HCA_Type      - Channel Adapter type, as appears in "ibstat"
+          Link          - Link type. Possible values:
+                            IB  - InfiniBand
+                            Eth - Ethernet
+          LnkCapWidth   - PCI width capability. Number of PCI lanes required by HCA
+          LnkStaWidth   - PCI width status. Number of PCI lanes avaliable for HCA in current slot.
+          Parent_addr   - BDF address of SRIOV parent Physical Function for this Virtual Function
+          Rate          - Link rate in Gbit/s
+          SRIOV         - SRIOV function type. Possible values:
+                            PF - Physical Function
+                            VF - Virtual Function
+
+         IB view
+          IbNetPref     - IB network preffix
+          PGuid         - Port GUID
+          PLid          - Port LID
+          SMGuid        - OpenSM GUID
+          SwDescription - Switch description. As appears in "ibnetdiscover"
+          SwGuid        - Switch GUID
+          VrtHCA        - Is this a Virtual HCA port. Possible values:
+                            Phys - Physical HCA port. For example, you could run openSM this ports
+                            Virt - Virtual HCA port.
+
+         RoCE view
+          RoCEstat      - RoCE status. Possible values:
+                            Lossless - Port configured with Lossless port configurations.
+                            Lossy    - Port configured with Lossy port configurations
+        """)
+        sys.exit(0)
 
 
 class HCAManager(object):
