@@ -26,12 +26,12 @@ class Config(object):
 
         self.output_view = "system"
         self.output_order_general = {
-                    "system": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
+                    "system": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
                                "Link", "Rate", "SRIOV", "Parent_addr","Tempr", "LnkCapWidth", "LnkStaWidth",
                                "HCA_Type"],
-                    "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "VrtHCA", "PLid",
+                    "ib": ["Dev", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "VrtHCA", "PLid",
                            "PGuid", "IbNetPref"],
-                    "roce": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
+                    "roce": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
                              "Operstate", "RoCEstat"]
         }
         self.output_order = self.output_order_general[self.output_view]
@@ -50,6 +50,7 @@ class Config(object):
         self.saquery_device_enabled = False
 
         self.output_format = "human_readable"
+        self.output_separator_char = "-"
         self.output_fields_filter_positive = ""
         self.output_fields_filter_negative = ""
         self.where_output_filter = ""
@@ -73,7 +74,7 @@ class Config(object):
                          
                      examples:
                          lshca -j -s mst -o \"-SN\"
-                         lshca -o \"Dev#,Port,Net,PN,Desc,RDMA\" -ow \"RDMA=mlx5_[48]\"
+                         lshca -o \"Dev,Port,Net,PN,Desc,RDMA\" -ow \"RDMA=mlx5_[48]\"
 
                         '''))
 
@@ -256,6 +257,7 @@ class Output(object):
         self.config = config
         self.output = []
         self.column_width = {}
+        self.separator = ""
         self.separator_len = 0
         self.output_filter = {}
         self.output_order = self.config.output_order
@@ -349,9 +351,14 @@ class Output(object):
             else:
                 self.separator_len = hca_info_line_width
 
+            self.separator = self.config.output_separator_char * self.separator_len
+
+            print self.separator
             for output_key in self.output:
                 self.print_hca_info(output_key["hca_info"])
+                print self.separator
                 self.print_bdf_devices(output_key["bdf_devices"])
+                print self.separator
         elif self.config.output_format == "json":
             print json.dumps(self.output, indent=4, sort_keys=True)
 
@@ -367,14 +374,17 @@ class Output(object):
         output_list = [""] * len(order_dict)
         for key in args:
             if key in order_dict:
+                if key == "Dev":
+                    prefix = ""
+                    suffix = " "
+                else:
+                    prefix = " "
+                    suffix = ": "
                 output_list = output_list[0:order_dict[key]] + \
-                              ["- " + str(key) + ": " + str(args[key])] + \
+                              [prefix + str(key) + suffix + str(args[key])] + \
                               output_list[order_dict[key] + 1:]
 
-        separator = "-" * self.separator_len
-        print separator
         print '\n'.join(output_list)
-        print separator
 
     def print_bdf_devices(self, args):
         count = 1
@@ -395,7 +405,7 @@ class Output(object):
                                       [str("{0:^{width}}".format(key, width=self.column_width[key]))] + \
                                       output_list[order_dict[key] + 1:]
                 print ' | '.join(output_list)
-                print "-" * self.separator_len
+                print self.separator
 
             for key in line:
                 if key in order_dict:
@@ -870,7 +880,7 @@ class MlnxHCA(object):
 
     @property
     def hca_index(self):
-        return self._hca_index
+        return "#" + str(self._hca_index)
 
     @hca_index.setter
     def hca_index(self, index):
@@ -890,7 +900,7 @@ class MlnxHCA(object):
                                "FW": self.fw,
                                "Desc": self.description,
                                "Tempr": self.tempr,
-                               "Dev#": self.hca_index},
+                               "Dev": self.hca_index},
                   "bdf_devices": []}
         for bdf_dev in self.bfd_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
