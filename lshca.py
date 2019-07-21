@@ -185,7 +185,7 @@ class Config(object):
     def extended_help():
         print textwrap.dedent("""
         Detailed fields description.
-        Note: BFD is a Bus-Device-Function PCI address. Each HCA port/vf has unique BFD.
+        Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
 
         HCA header:
           Dev   - Device number. Enumerated value padded with #
@@ -199,7 +199,7 @@ class Config(object):
          Generic
           Net       - Network interface name, as appears in "ip link show"
           Numa      - NUMA affinity
-          PCI_addr  - PCI address (BFD)
+          PCI_addr  - PCI address (BDF)
           Port      - Channel Adapter (ca_port, not related to physical port). On most mlx5 devices port is 1
           RDMA      - Channel Adapter name (ca_name)
           State     - Port state. Possible values:
@@ -256,7 +256,7 @@ class HCAManager(object):
             port_count = 1
 
             while True:
-                bdf_dev = MlnxBFDDevice(bdf, data_source, self.config, port_count)
+                bdf_dev = MlnxBDFDevice(bdf, data_source, self.config, port_count)
                 mlnx_bdf_devices.append(bdf_dev)
 
                 if port_count >= len(bdf_dev.port_list):
@@ -697,7 +697,7 @@ class SYSFSDevice(object):
         elif self.has_smi == "0":
             self.virt_hca = "Virt"
         elif self.has_smi == "1":
-            self.virt_hca = "Phis"
+            self.virt_hca = "Phys"
         else:
             self.virt_hca = ""
 
@@ -805,7 +805,7 @@ class MiscCMDs(object):
             return "=N/A="
 
 
-class MlnxBFDDevice(object):
+class MlnxBDFDevice(object):
     def __init__(self, bdf, data_source, config, port=1):
         self.bdf = bdf
         self.config = config
@@ -919,25 +919,25 @@ class MlnxBFDDevice(object):
 
 
 class MlnxHCA(object):
-    def __init__(self, bfd_dev):
-        self.bfd_devices = []
+    def __init__(self, bdf_dev):
+        self.bdf_devices = []
 
-        if bfd_dev.sriov in ("PF", "PF*"):
-            self.bfd_devices.append(bfd_dev)
+        if bdf_dev.sriov in ("PF", "PF*"):
+            self.bdf_devices.append(bdf_dev)
         else:
-            raise ValueError("MlnxHCA object can be initialised ONLY with PF bfdDev")
+            raise ValueError("MlnxHCA object can be initialised ONLY with PF bdfDev")
 
-        self.sn = bfd_dev.sn
-        self.pn = bfd_dev.pn
-        self.fw = bfd_dev.fw
-        self.description = bfd_dev.description
-        self.tempr = bfd_dev.tempr
+        self.sn = bdf_dev.sn
+        self.pn = bdf_dev.pn
+        self.fw = bdf_dev.fw
+        self.description = bdf_dev.description
+        self.tempr = bdf_dev.tempr
         self._hca_index = None
 
     def __repr__(self):
         output = ""
-        for bfd_dev in self.bfd_devices:
-            output = output + str(bfd_dev)
+        for bdf_dev in self.bdf_devices:
+            output = output + str(bdf_dev)
         return output
 
     @property
@@ -948,13 +948,13 @@ class MlnxHCA(object):
     def hca_index(self, index):
         self._hca_index = index
 
-    def add_bdf_dev(self, new_bfd_dev):
-        if new_bfd_dev.sriov == "VF" and new_bfd_dev.vfParent != "-":
-            for i, bfd_dev in enumerate(self.bfd_devices):
-                if bfd_dev.bdf == new_bfd_dev.vfParent:
-                    self.bfd_devices.insert(i+1, new_bfd_dev)
+    def add_bdf_dev(self, new_bdf_dev):
+        if new_bdf_dev.sriov == "VF" and new_bdf_dev.vfParent != "-":
+            for i, bdf_dev in enumerate(self.bdf_devices):
+                if bdf_dev.bdf == new_bdf_dev.vfParent:
+                    self.bdf_devices.insert(i + 1, new_bdf_dev)
         else:
-            self.bfd_devices.append(new_bfd_dev)
+            self.bdf_devices.append(new_bdf_dev)
 
     def output_info(self):
         output = {"hca_info": {"SN": self.sn,
@@ -964,7 +964,7 @@ class MlnxHCA(object):
                                "Tempr": self.tempr,
                                "Dev": self.hca_index},
                   "bdf_devices": []}
-        for bdf_dev in self.bfd_devices:
+        for bdf_dev in self.bdf_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
         return output
 
