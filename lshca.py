@@ -387,34 +387,36 @@ class Output(object):
     def print_output(self):
         self.filter_out_data()
 
+        hca_info_line_width = 0
+        for output_key in self.output:
+            for data in output_key["bdf_devices"]:
+                for key in data:
+                    if key in self.output_order:
+                        if len(data[key]) > len(key):
+                            width = len(data[key])
+                        else:
+                            width = len(key)
+
+                        if key not in self.column_width or len(data[key]) > self.column_width[key]:
+                            self.column_width[key] = width
+            for key in output_key["hca_info"]:
+                current_width = len(key) + len(str(output_key["hca_info"][key])) + 5
+                if hca_info_line_width < current_width:
+                    hca_info_line_width = current_width
+
+        bdf_device_line_width = sum(self.column_width.values()) + len(self.column_width) * 3 - 2
+
+        if bdf_device_line_width > hca_info_line_width:
+            self.separator_len = bdf_device_line_width
+        else:
+            self.separator_len = hca_info_line_width
+
+        self.separator = self.config.output_separator_char * self.separator_len
+
+        if len(self.separator) == 0:
+            sys.exit(1)
+
         if self.config.output_format == "human_readable":
-            hca_info_line_width = 0
-
-            for output_key in self.output:
-                for data in output_key["bdf_devices"]:
-                    for key in data:
-                        if key in self.output_order:
-                            if len(data[key]) > len(key):
-                                width = len(data[key])
-                            else:
-                                width = len(key)
-
-                            if key not in self.column_width or len(data[key]) > self.column_width[key]:
-                                self.column_width[key] = width
-                for key in output_key["hca_info"]:
-                    current_width = len(key) + len(str(output_key["hca_info"][key])) + 5
-                    if hca_info_line_width < current_width:
-                        hca_info_line_width = current_width
-
-            bdf_device_line_width = sum(self.column_width.values()) + len(self.column_width)*3 - 2
-
-            if bdf_device_line_width > hca_info_line_width:
-                self.separator_len = bdf_device_line_width
-            else:
-                self.separator_len = hca_info_line_width
-
-            self.separator = self.config.output_separator_char * self.separator_len
-
             print self.separator
             for output_key in self.output:
                 self.print_hca_info(output_key["hca_info"])
