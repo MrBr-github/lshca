@@ -1,3 +1,12 @@
+Ver. 3.0
+    - Feature: Added RoCE view. New fields are: Operstate and RoCEstat
+    - Feature: Added HCA temperature reading to HCA header
+    - Feature: Added revision to PN
+    - Feature: Added extended help with all fields descriptions
+    - Feature: lshca returns 1 if output is empty
+    - Change: Negative output filter changed from -o with - to -onot. See help for more details
+    - Change: HCA header design changed. Removed ":","-" and more
+    - Major code refactoring
 Ver. 2.6
     - Feature: Added "by field value" output filter
     - Feature: Added views option, default view called "system"
