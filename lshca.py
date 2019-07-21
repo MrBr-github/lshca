@@ -26,12 +26,12 @@ class Config(object):
 
         self.output_view = "system"
         self.output_order_general = {
-                    "system": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
+                    "system": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
                                "Link", "Rate", "SRIOV", "Parent_addr","Tempr", "LnkCapWidth", "LnkStaWidth",
                                "HCA_Type"],
-                    "ib": ["Dev#", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "VrtHCA", "PLid",
+                    "ib": ["Dev", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "VrtHCA", "PLid",
                            "PGuid", "IbNetPref"],
-                    "roce": ["Dev#", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
+                    "roce": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
                              "Operstate", "RoCEstat"]
         }
         self.output_order = self.output_order_general[self.output_view]
@@ -50,6 +50,7 @@ class Config(object):
         self.saquery_device_enabled = False
 
         self.output_format = "human_readable"
+        self.output_separator_char = "-"
         self.output_fields_filter_positive = ""
         self.output_fields_filter_negative = ""
         self.where_output_filter = ""
@@ -73,7 +74,7 @@ class Config(object):
                          
                      examples:
                          lshca -j -s mst -o \"-SN\"
-                         lshca -o \"Dev#,Port,Net,PN,Desc,RDMA\" -ow \"RDMA=mlx5_[48]\"
+                         lshca -o \"Dev,Port,Net,PN,Desc,RDMA\" -ow \"RDMA=mlx5_[48]\"
 
                         '''))
 
@@ -184,7 +185,7 @@ class Config(object):
     def extended_help():
         print textwrap.dedent("""
         Detailed fields description.
-        Note: BFD is a Bus-Device-Function PCI address. Each HCA port/vf has unique BFD.
+        Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
 
         HCA header:
           Dev   - Device number. Enumerated value padded with #
@@ -198,7 +199,7 @@ class Config(object):
          Generic
           Net       - Network interface name, as appears in "ip link show"
           Numa      - NUMA affinity
-          PCI_addr  - PCI address (BFD)
+          PCI_addr  - PCI address (BDF)
           Port      - Channel Adapter (ca_port, not related to physical port). On most mlx5 devices port is 1
           RDMA      - Channel Adapter name (ca_name)
           State     - Port state. Possible values:
@@ -255,7 +256,7 @@ class HCAManager(object):
             port_count = 1
 
             while True:
-                bdf_dev = MlnxBFDDevice(bdf, data_source, self.config, port_count)
+                bdf_dev = MlnxBDFDevice(bdf, data_source, self.config, port_count)
                 mlnx_bdf_devices.append(bdf_dev)
 
                 if port_count >= len(bdf_dev.port_list):
@@ -318,6 +319,7 @@ class Output(object):
         self.config = config
         self.output = []
         self.column_width = {}
+        self.separator = ""
         self.separator_len = 0
         self.output_filter = {}
         self.output_order = self.config.output_order
@@ -411,9 +413,14 @@ class Output(object):
             else:
                 self.separator_len = hca_info_line_width
 
+            self.separator = self.config.output_separator_char * self.separator_len
+
+            print self.separator
             for output_key in self.output:
                 self.print_hca_info(output_key["hca_info"])
+                print self.separator
                 self.print_bdf_devices(output_key["bdf_devices"])
+                print self.separator
         elif self.config.output_format == "json":
             print json.dumps(self.output, indent=4, sort_keys=True)
 
@@ -429,14 +436,17 @@ class Output(object):
         output_list = [""] * len(order_dict)
         for key in args:
             if key in order_dict:
+                if key == "Dev":
+                    prefix = ""
+                    suffix = " "
+                else:
+                    prefix = " "
+                    suffix = ": "
                 output_list = output_list[0:order_dict[key]] + \
-                              ["- " + str(key) + ": " + str(args[key])] + \
+                              [prefix + str(key) + suffix + str(args[key])] + \
                               output_list[order_dict[key] + 1:]
 
-        separator = "-" * self.separator_len
-        print separator
         print '\n'.join(output_list)
-        print separator
 
     def print_bdf_devices(self, args):
         count = 1
@@ -457,7 +467,7 @@ class Output(object):
                                       [str("{0:^{width}}".format(key, width=self.column_width[key]))] + \
                                       output_list[order_dict[key] + 1:]
                 print ' | '.join(output_list)
-                print "-" * self.separator_len
+                print self.separator
 
             for key in line:
                 if key in order_dict:
@@ -687,7 +697,7 @@ class SYSFSDevice(object):
         elif self.has_smi == "0":
             self.virt_hca = "Virt"
         elif self.has_smi == "1":
-            self.virt_hca = "Phis"
+            self.virt_hca = "Phys"
         else:
             self.virt_hca = ""
 
@@ -795,7 +805,7 @@ class MiscCMDs(object):
             return "=N/A="
 
 
-class MlnxBFDDevice(object):
+class MlnxBDFDevice(object):
     def __init__(self, bdf, data_source, config, port=1):
         self.bdf = bdf
         self.config = config
@@ -909,42 +919,42 @@ class MlnxBFDDevice(object):
 
 
 class MlnxHCA(object):
-    def __init__(self, bfd_dev):
-        self.bfd_devices = []
+    def __init__(self, bdf_dev):
+        self.bdf_devices = []
 
-        if bfd_dev.sriov in ("PF", "PF*"):
-            self.bfd_devices.append(bfd_dev)
+        if bdf_dev.sriov in ("PF", "PF*"):
+            self.bdf_devices.append(bdf_dev)
         else:
-            raise ValueError("MlnxHCA object can be initialised ONLY with PF bfdDev")
+            raise ValueError("MlnxHCA object can be initialised ONLY with PF bdfDev")
 
-        self.sn = bfd_dev.sn
-        self.pn = bfd_dev.pn
-        self.fw = bfd_dev.fw
-        self.description = bfd_dev.description
-        self.tempr = bfd_dev.tempr
+        self.sn = bdf_dev.sn
+        self.pn = bdf_dev.pn
+        self.fw = bdf_dev.fw
+        self.description = bdf_dev.description
+        self.tempr = bdf_dev.tempr
         self._hca_index = None
 
     def __repr__(self):
         output = ""
-        for bfd_dev in self.bfd_devices:
-            output = output + str(bfd_dev)
+        for bdf_dev in self.bdf_devices:
+            output = output + str(bdf_dev)
         return output
 
     @property
     def hca_index(self):
-        return self._hca_index
+        return "#" + str(self._hca_index)
 
     @hca_index.setter
     def hca_index(self, index):
         self._hca_index = index
 
-    def add_bdf_dev(self, new_bfd_dev):
-        if new_bfd_dev.sriov == "VF" and new_bfd_dev.vfParent != "-":
-            for i, bfd_dev in enumerate(self.bfd_devices):
-                if bfd_dev.bdf == new_bfd_dev.vfParent:
-                    self.bfd_devices.insert(i+1, new_bfd_dev)
+    def add_bdf_dev(self, new_bdf_dev):
+        if new_bdf_dev.sriov == "VF" and new_bdf_dev.vfParent != "-":
+            for i, bdf_dev in enumerate(self.bdf_devices):
+                if bdf_dev.bdf == new_bdf_dev.vfParent:
+                    self.bdf_devices.insert(i + 1, new_bdf_dev)
         else:
-            self.bfd_devices.append(new_bfd_dev)
+            self.bdf_devices.append(new_bdf_dev)
 
     def output_info(self):
         output = {"hca_info": {"SN": self.sn,
@@ -952,9 +962,9 @@ class MlnxHCA(object):
                                "FW": self.fw,
                                "Desc": self.description,
                                "Tempr": self.tempr,
-                               "Dev#": self.hca_index},
+                               "Dev": self.hca_index},
                   "bdf_devices": []}
-        for bdf_dev in self.bfd_devices:
+        for bdf_dev in self.bdf_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
         return output
 
