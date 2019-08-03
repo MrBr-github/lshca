@@ -230,7 +230,7 @@ class Config(object):
           VrtHCA        - Is this a Virtual HCA port. Possible values:
                             Phys - Physical HCA port. For example, you could run openSM this ports
                             Virt - Virtual HCA port.
-
+                            NA   - IB link - not supported with mlx4 driver OR non IB link
          RoCE view
           RoCEstat      - RoCE status. Possible values:
                             Lossless - Port configured with Lossless port configurations.
@@ -694,8 +694,8 @@ class SYSFSDevice(object):
         self.has_smi = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                        "/ports/" + self.port + "/has_smi")
         self.has_smi = self.has_smi.rstrip()
-        if self.link_layer != "IB":
-            self.virt_hca = "=N/A="
+        if self.link_layer != "IB" or re.match('mlx4', self.rdma):
+            self.virt_hca = "N/A"
         elif self.has_smi == "0":
             self.virt_hca = "Virt"
         elif self.has_smi == "1":
