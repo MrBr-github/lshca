@@ -10,8 +10,15 @@ import traceback
 class DataSourceRecorded(DataSource):
     def read_cmd_output_from_file(self, cmd_prefix, cmd):
         file_to_read = self.config.record_dir + cmd_prefix + cmd
-        f = open(file_to_read, "rb")
-        output = pickle.load(f)
+        try:
+            f = open(file_to_read, "rb")
+            output = pickle.load(f)
+        except IOError:
+            if self.config.skip_missing:
+                output = ""
+            else:
+                raise
+
         return output
 
     def exec_shell_cmd(self, cmd, use_cache=False):
@@ -43,11 +50,17 @@ class BColors:
     UNDERLINE = '\033[4m'
 
 
-def main(tmp_dir_name, recorder_sys_argv):
+class RegressionConfig(Config):
+    def __init__(self):
+        self.skip_missing = False
+        super(RegressionConfig, self).__init__()
+
+
+def main(tmp_dir_name, recorder_sys_argv, regression_conf):
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script")
 
-    config = Config()
+    config = regression_conf
 
     # Comes to handle missing TTY during regression
     config.override__set_tty_exists = True
@@ -64,6 +77,8 @@ def main(tmp_dir_name, recorder_sys_argv):
 def regression():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
+    parser.add_argument('--skip-missing', action='store_true', dest="skip_missing",
+                        help="skip missing data source files")
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
                         help=textwrap.dedent('''\
                                 override saved parameters and pass new ones
@@ -95,7 +110,9 @@ def regression():
             sys.stdout = stdout
             trace_back = ""
             try:
-                main(tmp_dir_name, recorder_sys_argv)
+                regression_conf = RegressionConfig()
+                regression_conf.skip_missing = args.skip_missing
+                main(tmp_dir_name, recorder_sys_argv, regression_conf)
                 output = stdout
             except Exception as e:
                 output = e
