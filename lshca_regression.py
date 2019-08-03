@@ -79,6 +79,12 @@ def regression():
     parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
     parser.add_argument('--skip-missing', action='store_true', dest="skip_missing",
                         help="skip missing data source files")
+    parser.add_argument('--display-only', choices=["orig", "curr"], dest="display_only",
+                        help=textwrap.dedent('''\
+                                instead of diff display only:
+                                  orig - original data
+                                  curr - current data
+                                '''))
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
                         help=textwrap.dedent('''\
                                 override saved parameters and pass new ones
@@ -142,9 +148,14 @@ def regression():
                 print "Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + \
                       " Saved and regression outputs differ\n"
 
-                d = difflib.Differ()
-                diff = d.compare(saved_output.split("\n"), test_output.split("\n"))
-                print '\n'.join(diff)
+                if not args.display_only:
+                    d = difflib.Differ()
+                    diff = d.compare(saved_output.split("\n"), test_output.split("\n"))
+                    print '\n'.join(diff)
+                elif args.display_only == "orig":
+                    print saved_output
+                elif args.display_only == "curr":
+                    print test_output
             else:
                 print "Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC
                 if args.verbose:
