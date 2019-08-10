@@ -384,9 +384,7 @@ class Output(object):
         self.apply_where_output_filters()
         self.apply_select_output_filters()
 
-    def print_output(self):
-        self.filter_out_data()
-
+    def update_separator_length(self):
         hca_info_line_width = 0
         for output_key in self.output:
             for data in output_key["bdf_devices"]:
@@ -411,20 +409,32 @@ class Output(object):
         else:
             self.separator_len = hca_info_line_width
 
-        self.separator = self.config.output_separator_char * self.separator_len
+    def print_output(self):
+        self.filter_out_data()
 
-        if len(self.separator) == 0:
+        self.update_separator_length()
+
+        # DEBUG
+        if self.separator_len == 0:
             sys.exit(1)
 
         if self.config.output_format == "human_readable":
-            print self.separator
-            for output_key in self.output:
-                self.print_hca_info(output_key["hca_info"])
-                print self.separator
-                self.print_bdf_devices(output_key["bdf_devices"])
-                print self.separator
+            self.print_output_human_readable()
         elif self.config.output_format == "json":
-            print json.dumps(self.output, indent=4, sort_keys=True)
+            self.print_output_json()
+
+    def print_output_human_readable(self):
+        self.separator = self.config.output_separator_char * self.separator_len
+
+        print self.separator
+        for output_key in self.output:
+            self.print_hca_info(output_key["hca_info"])
+            print self.separator
+            self.print_bdf_devices(output_key["bdf_devices"])
+            print self.separator
+
+    def print_output_json(self):
+        print json.dumps(self.output, indent=4, sort_keys=True)
 
     def print_hca_info(self, args):
         order_dict = {}
