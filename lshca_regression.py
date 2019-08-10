@@ -79,6 +79,8 @@ def regression():
     parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
     parser.add_argument('--skip-missing', action='store_true', dest="skip_missing",
                         help="skip missing data source files")
+    parser.add_argument('--keep-recorded-ds', action='store_true', dest="keep_recorded_ds",
+                        help="Don't delete recorded data source tmp directory")
     parser.add_argument('--display-only', choices=["orig", "curr"], dest="display_only",
                         help=textwrap.dedent('''\
                                 instead of diff display only:
@@ -162,7 +164,8 @@ def regression():
                     print BColors.OKBLUE + "Test output below:" + BColors.ENDC
                     print test_output
 
-        shutil.rmtree(tmp_dir_name)
+        if not args.keep_recorded_ds:
+            shutil.rmtree(tmp_dir_name)
 
         if not regression_run_succseeded:
             sys.exit(1)
