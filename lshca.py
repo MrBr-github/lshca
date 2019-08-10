@@ -10,6 +10,7 @@
 import os
 import pickle
 import re
+import sre_constants
 import StringIO
 import subprocess
 import sys
@@ -361,7 +362,11 @@ class Output(object):
 
         output_filter = dict(item.split("=") for item in self.config.where_output_filter)
         for filter_key in output_filter:
-            output_filter[filter_key] = re.compile(output_filter[filter_key])
+            try:
+                output_filter[filter_key] = re.compile(output_filter[filter_key])
+            except sre_constants.error:
+                print "Error: Invalid pattern \"%s\" passed to output filter " % output_filter[filter_key]
+                sys.exit(1)
 
         for filter_key in output_filter:
             remove_hca_list = []
