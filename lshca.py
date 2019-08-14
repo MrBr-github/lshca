@@ -27,13 +27,13 @@ class Config(object):
 
         self.output_view = "system"
         self.output_order_general = {
-                    "system": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
-                               "Link", "Rate", "SRIOV", "Parent_addr","Tempr", "LnkCapWidth", "LnkStaWidth",
+                    "system": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                               "IpStat", "Link", "Rate", "SRIOV", "Parent_addr","Tempr", "LnkCapWidth", "LnkStaWidth",
                                "HCA_Type"],
-                    "ib": ["Dev", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "State", "VrtHCA", "PLid",
-                           "PGuid", "IbNetPref"],
-                    "roce": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "State",
-                             "Operstate", "RoCEstat"]
+                    "ib": ["Dev", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
+                           "VrtHCA", "PLid", "PGuid", "IbNetPref"],
+                    "roce": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                             "IpStat", "RoCEstat"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -203,12 +203,19 @@ class Config(object):
           PCI_addr  - PCI address (BDF)
           Port      - Channel Adapter (ca_port, not related to physical port). On most mlx5 devices port is 1
           RDMA      - Channel Adapter name (ca_name)
-          State     - Port state. Possible values:
+          LnkStat   - Port state as provided by driver. Possible values:
                                State/Physical State
                         actv - active/linkup 
                         init - initializing/linkup
                         poll - down/polling
                         down - down/disabled
+          IpStat    - Port IP address configuration state as provided by kernel. Possible values:
+                               Operstate/IP address configured
+                        down    - down/no ip addr. configured
+                        up_noip - up/no ip addr. configured
+                        ip_ipv4 - up/ipv4 addr. configured
+                        ip_ipv6 - up/ipv6 addr. configured
+                        ip_ipv6 - up/both ipv4 and ipv6 addr. configured
 
          System view
           HCA_Type      - Channel Adapter type, as appears in "ibstat"
@@ -656,19 +663,19 @@ class SYSFSDevice(object):
 
         self.hca_type = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/hca_type").rstrip()
 
-        self.state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
-                                                     self.port + "/state")
-        self.state = extract_string_by_regex(self.state, "[0-9:]+ (.*)", "").lower()
-        if self.state == "active":
-            self.state = "actv"
+        self.lnk_state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
+                                                         self.port + "/state")
+        self.lnk_state = extract_string_by_regex(self.lnk_state, "[0-9:]+ (.*)", "").lower()
+        if self.lnk_state == "active":
+            self.lnk_state = "actv"
 
-        if self.state == "down":
+        if self.lnk_state == "down":
             self.phys_state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                           "/ports/" + self.port + "/phys_state")
             self.phys_state = extract_string_by_regex(self.phys_state, "[0-9:]+ (.*)", "").lower()
 
             if self.phys_state == "polling":
-                self.state = "poll"
+                self.lnk_state = "poll"
 
 
         self.link_layer = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
@@ -685,7 +692,7 @@ class SYSFSDevice(object):
         self.port_rate = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
                                                          self.port + "/rate")
         self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
-        if self.state == "down" and self.config.show_warnings_and_errors is True:
+        if self.lnk_state == "down" and self.config.show_warnings_and_errors is True:
             self.port_rate = self.port_rate + self.config.warning_sign
 
         self.port_list = data_source.list_dir_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/").rstrip()
@@ -728,15 +735,38 @@ class SYSFSDevice(object):
         else:
             self.virt_hca = ""
 
+        self.operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
+        self.ip_state = None
+        if self.operstate == "up":
+            # Implemented via shell cmd to avoid using non default libraries
+            interface_data = data_source.exec_shell_cmd(" ip address show dev %s" % self.net)
+            ipv4_data = find_in_list(interface_data, "inet .+")
+            ipv6_data = find_in_list(interface_data, "inet6 .+")
+            if ipv4_data and ipv6_data:
+                self.ip_state = "up_ip46"
+            elif ipv4_data:
+                self.ip_state = "up_ip4"
+            elif ipv6_data:
+                self.ip_state = "up_ip6"
+            else:
+                self.ip_state = "up_noip"
+        elif not self.operstate:
+            self.ip_state = ""
+        else:
+            self.ip_state = "down"
+
+        if self.ip_state == "down" and self.lnk_state == "actv" \
+                and self.config.show_warnings_and_errors is True:
+            self.ip_state = self.ip_state + self.config.error_sign
+        if self.ip_state == "up_noip" and self.config.show_warnings_and_errors is True:
+            self.ip_state = self.ip_state + self.config.warning_sign
+
         # ========== RoCE view only related variables ==========
-        self.operstate = None
         self.gtclass = None
         self.tcp_ecn = None
         self.rdma_cm_tos = None
 
         if self.config.output_view == "roce":
-            self.operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
-
             self.gtclass = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                            "/tc/1/traffic_class").rstrip()
             self.tcp_ecn = data_source.read_file_if_exists("/proc/sys/net/ipv4/tcp_ecn").rstrip()
@@ -843,7 +873,7 @@ class MlnxBDFDevice(object):
         self.hca_type = self.sysFSDevice.hca_type
         self.ib_net_prefix = self.sysFSDevice.ib_net_prefix
         self.link_layer = self.sysFSDevice.link_layer
-        self.operstate = self.sysFSDevice.operstate
+        self.ip_state = self.sysFSDevice.ip_state
         self.pguid = self.sysFSDevice.pguid
         self.port = self.sysFSDevice.port
         self.port_list = self.sysFSDevice.port_list
@@ -853,7 +883,7 @@ class MlnxBDFDevice(object):
         self.numa = self.sysFSDevice.numa
         self.rdma = self.sysFSDevice.rdma
         self.smlid = self.sysFSDevice.smlid
-        self.state = self.sysFSDevice.state
+        self.lnk_state = self.sysFSDevice.lnk_state
         self.virt_hca = self.sysFSDevice.virt_hca
         self.vfParent = self.sysFSDevice.vfParent
 
@@ -922,7 +952,7 @@ class MlnxBDFDevice(object):
                   "RDMA": self.rdma,
                   "Net": self.net,
                   "HCA_Type": self.hca_type,
-                  "State": self.state,
+                  "LnkStat": self.lnk_state,
                   "Rate": self.port_rate,
                   "Port": self.port,
                   "Link": self.link_layer,
@@ -936,7 +966,7 @@ class MlnxBDFDevice(object):
                   "SwGuid": self.sw_guid,
                   "SwDescription": self.sw_description,
                   "VrtHCA": self.virt_hca,
-                  "Operstate": self.operstate,
+                  "IpStat": self.ip_state,
                   "RoCEstat": self.roce_status}
         return output
 
