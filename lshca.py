@@ -330,7 +330,6 @@ class Output(object):
         self.output.append(data)
 
     def apply_select_output_filters(self):
-
         if len(self.config.output_fields_filter_positive) > 0:
             self.output_order = self.config.output_fields_filter_positive
         elif len(self.config.output_fields_filter_negative) > 0:
@@ -345,14 +344,16 @@ class Output(object):
 
         data_keys_remove_list = []
         if len(self.output) > 0:
-            output_data_keys = list(self.output[0]["hca_info"]) + list(self.output[0]["bdf_devices"][0])
+            output_data_keys = list(self.output[0]) + list(self.output[0]["bdf_devices"][0])
             data_keys_remove_list = list(set(output_data_keys) - set(self.output_order))
 
         for hca in self.output:
             for key in data_keys_remove_list:
-                hca["hca_info"].pop(key, None)
-                for bdf_device in hca["bdf_devices"]:
-                    bdf_device.pop(key, None)
+                if key == "bdf_devices":
+                    continue
+                hca.pop(key, None)
+            for bdf_device in hca["bdf_devices"]:
+                bdf_device.pop(key, None)
 
     def apply_where_output_filters(self):
         if not self.config.where_output_filter:
@@ -375,8 +376,8 @@ class Output(object):
                     hca["bdf_devices"].remove(bdf_device)
 
                 if len(hca["bdf_devices"]) == 0 or \
-                        filter_key in hca["hca_info"] and not \
-                        re.match(output_filter[filter_key], hca["hca_info"][filter_key]):
+                        filter_key in hca and not \
+                        re.match(output_filter[filter_key], hca[filter_key]):
                     remove_hca_list.append(hca)
 
             for hca in remove_hca_list:
@@ -386,49 +387,61 @@ class Output(object):
         self.apply_where_output_filters()
         self.apply_select_output_filters()
 
-    def print_output(self):
-        self.filter_out_data()
+    def update_separator_and_column_width(self):
+        line_width = 0
+        for hca in self.output:
+            for key in hca:
+                if key == "bdf_devices":
+                    for bdf_device in hca["bdf_devices"]:
+                        for bdf_key in bdf_device:
+                            if bdf_key in self.output_order:
+                                if len(bdf_device[bdf_key]) > len(bdf_key):
+                                    width = len(bdf_device[bdf_key])
+                                else:
+                                    width = len(bdf_key)
 
-        hca_info_line_width = 0
-        for output_key in self.output:
-            for data in output_key["bdf_devices"]:
-                for key in data:
-                    if key in self.output_order:
-                        if len(data[key]) > len(key):
-                            width = len(data[key])
-                        else:
-                            width = len(key)
-
-                        if key not in self.column_width or len(data[key]) > self.column_width[key]:
-                            self.column_width[key] = width
-            for key in output_key["hca_info"]:
-                current_width = len(key) + len(str(output_key["hca_info"][key])) + 5
-                if hca_info_line_width < current_width:
-                    hca_info_line_width = current_width
+                                if bdf_key not in self.column_width or \
+                                        len(bdf_device[bdf_key]) > self.column_width[bdf_key]:
+                                    self.column_width[bdf_key] = width
+                else:
+                    current_width = len(key) + len(str(hca[key])) + 5
+                    if line_width < current_width:
+                        line_width = current_width
 
         bdf_device_line_width = sum(self.column_width.values()) + len(self.column_width) * 3 - 2
 
-        if bdf_device_line_width > hca_info_line_width:
+        if bdf_device_line_width > line_width:
             self.separator_len = bdf_device_line_width
         else:
-            self.separator_len = hca_info_line_width
+            self.separator_len = line_width
 
-        self.separator = self.config.output_separator_char * self.separator_len
+    def print_output(self):
+        self.filter_out_data()
 
-        if len(self.separator) == 0:
+        self.update_separator_and_column_width()
+
+        if self.separator_len == 0:
             sys.exit(1)
 
         if self.config.output_format == "human_readable":
-            print self.separator
-            for output_key in self.output:
-                self.print_hca_info(output_key["hca_info"])
-                print self.separator
-                self.print_bdf_devices(output_key["bdf_devices"])
-                print self.separator
+            self.print_output_human_readable()
         elif self.config.output_format == "json":
-            print json.dumps(self.output, indent=4, sort_keys=True)
+            self.print_output_json()
 
-    def print_hca_info(self, args):
+    def print_output_human_readable(self):
+        self.separator = self.config.output_separator_char * self.separator_len
+
+        print self.separator
+        for hca in self.output:
+            self.print_hca_header(hca)
+            print self.separator
+            self.print_bdf_devices(hca["bdf_devices"])
+            print self.separator
+
+    def print_output_json(self):
+        print json.dumps(self.output, indent=4, sort_keys=True)
+
+    def print_hca_header(self, args):
         order_dict = {}
 
         position = 0
@@ -962,12 +975,12 @@ class MlnxHCA(object):
             self.bdf_devices.append(new_bdf_dev)
 
     def output_info(self):
-        output = {"hca_info": {"SN": self.sn,
-                               "PN": self.pn,
-                               "FW": self.fw,
-                               "Desc": self.description,
-                               "Tempr": self.tempr,
-                               "Dev": self.hca_index},
+        output = {"SN": self.sn,
+                  "PN": self.pn,
+                  "FW": self.fw,
+                  "Desc": self.description,
+                  "Tempr": self.tempr,
+                  "Dev": self.hca_index,
                   "bdf_devices": []}
         for bdf_dev in self.bdf_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
