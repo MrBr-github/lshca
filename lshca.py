@@ -91,12 +91,13 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'all'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
                               ib     - Show IB oriented HCA info. Implies "saquery" data source
                               roce   - Show RoCE oriented HCA info"
+                              all    - Show all available HCA info. Aggregates all above views + MST data source.
                             ''')
                             )
         parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'saquery'], nargs='+', dest="sources",
@@ -152,8 +153,23 @@ class Config(object):
             self.output_view = "roce"
         elif args.view == "system":
             self.output_view = "system"
+        elif args.view == "all":
+            self.mst_device_enabled = True
+            self.saquery_device_enabled = True
+            self.output_view = "all"
 
-        self.output_order = self.output_order_general[self.output_view]
+        if self.output_view != "all":
+            self.output_order = self.output_order_general[self.output_view]
+        else:
+            i = 0
+            for view in self.output_order_general:
+                if i == 0:
+                    self.output_order = self.output_order_general[view]
+                else:
+                    for key in self.output_order_general[view]:
+                        if key not in self.output_order:
+                            self.output_order.append(key)
+                i += 1
 
         if args.json:
             self.output_format = "json"
@@ -770,7 +786,7 @@ class SYSFSDevice(object):
         self.tcp_ecn = None
         self.rdma_cm_tos = None
 
-        if self.config.output_view == "roce":
+        if self.config.output_view == "roce" or self.config.output_view == "all":
             self.gtclass = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                            "/tc/1/traffic_class").rstrip()
             self.tcp_ecn = data_source.read_file_if_exists("/proc/sys/net/ipv4/tcp_ecn").rstrip()
