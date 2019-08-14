@@ -475,7 +475,8 @@ class Output(object):
                               [prefix + str(key) + suffix + str(args[key])] + \
                               output_list[order_dict[key] + 1:]
 
-        print '\n'.join(output_list)
+        if output_list:
+            print '\n'.join(output_list)
 
     def print_bdf_devices(self, args):
         count = 1
