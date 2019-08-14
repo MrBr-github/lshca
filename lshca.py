@@ -203,9 +203,11 @@ class Config(object):
           Port      - Channel Adapter (ca_port, not related to physical port). On most mlx5 devices port is 1
           RDMA      - Channel Adapter name (ca_name)
           State     - Port state. Possible values:
-                        actv - port active
-                        init - port initializing
-                        down - port down
+                               State/Physical State
+                        actv - active/linkup 
+                        init - initializing/linkup
+                        poll - down/polling
+                        down - down/disabled
 
          System view
           HCA_Type      - Channel Adapter type, as appears in "ibstat"
@@ -642,9 +644,14 @@ class SYSFSDevice(object):
         if self.state == "active":
             self.state = "actv"
 
-        self.phys_state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+        if self.state == "down":
+            self.phys_state = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                           "/ports/" + self.port + "/phys_state")
-        self.phys_state = extract_string_by_regex(self.phys_state, "[0-9:]+ (.*)", "").lower()
+            self.phys_state = extract_string_by_regex(self.phys_state, "[0-9:]+ (.*)", "").lower()
+
+            if self.phys_state == "polling":
+                self.state = "poll"
+
 
         self.link_layer = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                           "/ports/" + self.port + "/link_layer")
@@ -862,10 +869,6 @@ class MlnxBDFDevice(object):
     # Not in use, consider removal
     def get_slave_bdf_devices(self):
         return self.slaveBDFDevices
-
-    # Not in use, consider removal
-    def get_phys_state(self):
-        return self.sysFSDevice.phys_state
 
     @property
     def sriov(self):
