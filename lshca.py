@@ -51,6 +51,7 @@ class Config(object):
         self.saquery_device_enabled = False
 
         self.output_format = "human_readable"
+        self.output_format_elastic = None
         self.output_separator_char = "-"
         self.output_fields_filter_positive = ""
         self.output_fields_filter_negative = ""
@@ -98,8 +99,11 @@ class Config(object):
                               ib     - Show IB oriented HCA info. Implies "saquery" data source
                               roce   - Show RoCE oriented HCA info"
                               all    - Show all available HCA info. Aggregates all above views + MST data source.
+                              Note: all human readable output views are elastic. See extended help for more info.
                             ''')
                             )
+        parser.add_argument('--non-elastic', action='store_false', dest="elastic",
+                            help="Set human readable output as non elastic")
         parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'saquery'], nargs='+', dest="sources",
                             help=textwrap.dedent('''\
                             add optional data sources (comma delimited list)
@@ -198,10 +202,12 @@ class Config(object):
         if args.extended_help:
             self.extended_help()
 
+        self.output_format_elastic = args.elastic
+
     @staticmethod
     def extended_help():
         print textwrap.dedent("""
-        Detailed fields description.
+        --== Detailed fields description ==--
         Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
 
         HCA header:
@@ -261,6 +267,18 @@ class Config(object):
           RoCEstat      - RoCE status. Possible values:
                             Lossless - Port configured with Lossless port configurations.
                             Lossy    - Port configured with Lossy port configurations
+
+
+        --== Elastic view rules ==--
+        Elastic view comes to reduce excessive information in human readable output.
+        Following will be removed per HCA if the condition is True
+        SRIOV        - if all SRIOV are PF
+        Parent_addr  - if all SRIOV are PF
+        LnkStaWidth  - if LnkStaWidth matches LnkCapWidth
+        Port         - if all Port values are 1
+        LnkStat      - if all LnkStat valuse are "actv"
+        IpStat       - if all LnkStat valuse are "down"
+
         """)
         sys.exit(0)
 
@@ -293,7 +311,7 @@ class HCAManager(object):
         self.mlnxHCAs = []
         # First handle all PFs
         for bdf_dev in mlnx_bdf_devices:
-            if bdf_dev.sriov in ("PF", "PF*"):
+            if bdf_dev.sriov in ("PF", "PF" + self.config.warning_sign):
                 hca_found = False
                 for hca in self.mlnxHCAs:
                     if bdf_dev.sys_image_guid == hca.sys_image_guid:
@@ -301,7 +319,7 @@ class HCAManager(object):
                         hca.add_bdf_dev(bdf_dev)
 
                 if not hca_found:
-                    hca = MlnxHCA(bdf_dev)
+                    hca = MlnxHCA(bdf_dev,  self.config)
                     hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
 
@@ -411,13 +429,72 @@ class Output(object):
             for hca in remove_hca_list:
                 self.output.remove(hca)
 
+    def elastic_output(self):
+        for hca in self.output:
+            hca_fields_for_removal = []
+            remove_sriov_and_parent = True
+            remove_lnk_sta_width = True
+            remove_port = True
+            remove_lnk_stat = True
+            remove_ip_stat = True
+
+            for bdf_device in hca["bdf_devices"]:
+                # ---- Removing SRIOV and Parent_addr if no VFs present
+                if "SRIOV" in bdf_device:
+                    if bdf_device["SRIOV"].strip() != "PF" and \
+                            bdf_device["SRIOV"].strip() != "PF" + self.config.warning_sign:
+                        remove_sriov_and_parent = False
+
+                # ---- Remove LnkStaWidth if it matches LnkCapWidth
+                if "LnkStaWidth" in bdf_device:
+                    field_value = bdf_device["LnkStaWidth"].strip()
+                    if re.search(re.escape(self.config.error_sign) + "$", field_value):
+                        remove_lnk_sta_width = False
+
+                # ---- Remove Port if all values are 1
+                if "Port" in bdf_device:
+                    if bdf_device["Port"].strip() != "1":
+                        remove_port = False
+
+                # ---- Remove IpStat if all LnkStat are down
+                if "LnkStat" in bdf_device:
+                    if bdf_device["LnkStat"].strip() != "down":
+                        remove_ip_stat = False
+
+                # ---- Remove LnkStat if all are actv
+                if "LnkStat" in bdf_device:
+                    if bdf_device["LnkStat"].strip() != "actv":
+                        remove_lnk_stat = False
+
+            if remove_sriov_and_parent:
+                hca_fields_for_removal.append("SRIOV")
+                hca_fields_for_removal.append("Parent_addr")
+            if remove_lnk_sta_width:
+                hca_fields_for_removal.append("LnkStaWidth")
+            if remove_port:
+                hca_fields_for_removal.append("Port")
+            if remove_ip_stat:
+                hca_fields_for_removal.append("IpStat")
+            if remove_lnk_stat:
+                hca_fields_for_removal.append("LnkStat")
+
+            for field in hca_fields_for_removal:
+                if field in hca:
+                    del hca[field]
+                for bdf_device in hca["bdf_devices"]:
+                    if field in bdf_device:
+                        del bdf_device[field]
+
     def filter_out_data(self):
         self.apply_where_output_filters()
         self.apply_select_output_filters()
+        if self.config.output_format == "human_readable" and self.config.output_format_elastic:
+            self.elastic_output()
 
     def update_separator_and_column_width(self):
         line_width = 0
         for hca in self.output:
+            curr_hca_column_width = {}
             for key in hca:
                 if key == "bdf_devices":
                     for bdf_device in hca["bdf_devices"]:
@@ -431,17 +508,17 @@ class Output(object):
                                 if bdf_key not in self.column_width or \
                                         len(bdf_device[bdf_key]) > self.column_width[bdf_key]:
                                     self.column_width[bdf_key] = width
+                                if bdf_key not in curr_hca_column_width or \
+                                        len(bdf_device[bdf_key]) > curr_hca_column_width[bdf_key]:
+                                    curr_hca_column_width[bdf_key] = width
                 else:
                     current_width = len(key) + len(str(hca[key])) + 5
                     if line_width < current_width:
                         line_width = current_width
 
-        bdf_device_line_width = sum(self.column_width.values()) + len(self.column_width) * 3 - 2
+            bdf_device_line_width = sum(curr_hca_column_width.values()) + len(curr_hca_column_width) * 3 - 2
 
-        if bdf_device_line_width > line_width:
-            self.separator_len = bdf_device_line_width
-        else:
-            self.separator_len = line_width
+            self.separator_len = max(self.separator_len, bdf_device_line_width, line_width)
 
     def print_output(self):
         self.filter_out_data()
@@ -966,7 +1043,7 @@ class MlnxBDFDevice(object):
             return "Lossy"
 
     def output_info(self):
-        if self.sriov in ("PF", "PF*"):
+        if self.sriov in ("PF", "PF" + self.config.warning_sign):
             sriov = self.sriov + "  "
         else:
             sriov = "  " + self.sriov
@@ -997,10 +1074,11 @@ class MlnxBDFDevice(object):
 
 
 class MlnxHCA(object):
-    def __init__(self, bdf_dev):
+    def __init__(self, bdf_dev, config):
         self.bdf_devices = []
+        self.config = config
 
-        if bdf_dev.sriov in ("PF", "PF*"):
+        if bdf_dev.sriov in ("PF", "PF" + self.config.warning_sign):
             self.bdf_devices.append(bdf_dev)
         else:
             raise ValueError("MlnxHCA object can be initialised ONLY with PF bdfDev")
