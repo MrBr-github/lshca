@@ -280,7 +280,7 @@ class HCAManager(object):
             if bdf_dev.sriov in ("PF", "PF*"):
                 hca_found = False
                 for hca in self.mlnxHCAs:
-                    if bdf_dev.sn == hca.sn:
+                    if bdf_dev.sys_image_guid == hca.sys_image_guid:
                         hca_found = True
                         hca.add_bdf_dev(bdf_dev)
 
@@ -300,7 +300,7 @@ class HCAManager(object):
                     if vf_parent_bdf == parent_bdf_dev.bdf:
                         parent_found = True
 
-                        hca = self.get_hca_by_sn(parent_bdf_dev.sn)
+                        hca = self.get_hca_by_sys_image_guid(parent_bdf_dev.sys_image_guid)
                         if hca is not None:
                             hca.add_bdf_dev(bdf_dev)
                         else:
@@ -317,9 +317,9 @@ class HCAManager(object):
 
         out.print_output()
 
-    def get_hca_by_sn(self, sn):
+    def get_hca_by_sys_image_guid(self, sys_image_guid):
         for hca in self.mlnxHCAs:
-            if sn == hca.sn:
+            if sys_image_guid == hca.sys_image_guid:
                 return hca
         return None
 
@@ -762,6 +762,9 @@ class SYSFSDevice(object):
         if self.ip_state == "up_noip" and self.config.show_warnings_and_errors is True:
             self.ip_state = self.ip_state + self.config.warning_sign
 
+        self.sys_image_guid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                              "/sys_image_guid").rstrip()
+
         # ========== RoCE view only related variables ==========
         self.gtclass = None
         self.tcp_ecn = None
@@ -887,6 +890,7 @@ class MlnxBDFDevice(object):
         self.lnk_state = self.sysFSDevice.lnk_state
         self.virt_hca = self.sysFSDevice.virt_hca
         self.vfParent = self.sysFSDevice.vfParent
+        self.sys_image_guid = self.sysFSDevice.sys_image_guid
 
         self.pciDevice = PCIDevice(self.bdf, data_source, self.config)
         self.description = self.pciDevice.description
@@ -988,6 +992,7 @@ class MlnxHCA(object):
         self.sn = bdf_dev.sn
         self.pn = bdf_dev.pn
         self.fw = bdf_dev.fw
+        self.sys_image_guid = bdf_dev.sys_image_guid
         self.description = bdf_dev.description
         self.tempr = bdf_dev.tempr
         self._hca_index = None
