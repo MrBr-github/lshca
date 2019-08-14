@@ -222,8 +222,8 @@ class Config(object):
           Link          - Link type. Possible values:
                             IB  - InfiniBand
                             Eth - Ethernet
-          LnkCapWidth   - PCI width capability. Number of PCI lanes required by HCA
-          LnkStaWidth   - PCI width status. Number of PCI lanes avaliable for HCA in current slot.
+          LnkCapWidth   - PCI width capability. Number of PCI lanes required by HCA. PF only.
+          LnkStaWidth   - PCI width status. Number of PCI lanes avaliable for HCA in current slot. PF only.
           Parent_addr   - BDF address of SRIOV parent Physical Function for this Virtual Function
           Rate          - Link rate in Gbit/s
           SRIOV         - SRIOV function type. Possible values:
@@ -889,8 +889,12 @@ class MlnxBDFDevice(object):
 
         self.pciDevice = PCIDevice(self.bdf, data_source, self.config)
         self.description = self.pciDevice.description
-        self.lnkCapWidth = self.pciDevice.lnkCapWidth
-        self.lnkStaWidth = self.pciDevice.lnkStaWidth
+        if self.sriov != "VF":
+            self.lnkCapWidth = self.pciDevice.lnkCapWidth
+            self.lnkStaWidth = self.pciDevice.lnkStaWidth
+        else:
+            self.lnkCapWidth = ""
+            self.lnkStaWidth = ""
         self.pn = self.pciDevice.pn
         self.sn = self.pciDevice.sn
 
