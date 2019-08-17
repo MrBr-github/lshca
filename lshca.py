@@ -37,7 +37,7 @@ class Config(object):
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
-        self.override__set_tty_exists = False
+        self.colour_warnings_and_errors = True
         self.warning_sign = "*"
         self.error_sign = " >!<"
 
@@ -104,6 +104,8 @@ class Config(object):
                             )
         parser.add_argument('--non-elastic', action='store_false', dest="elastic",
                             help="Set human readable output as non elastic")
+        parser.add_argument('--no-colour', '--no-color', action='store_false', dest="colour",
+                            help="Do not colour warrinings and errors.")
         parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'saquery'], nargs='+', dest="sources",
                             help=textwrap.dedent('''\
                             add optional data sources (comma delimited list)
@@ -140,10 +142,6 @@ class Config(object):
         self.process_arguments(args)
 
     def process_arguments(self, args):
-        # if output not to terminal
-        if sys.stdout.isatty() is False and self.override__set_tty_exists is False:
-            self.show_warnings_and_errors = False
-
         if args.mode == "record":
             self.record_data_for_debug = True
 
@@ -203,6 +201,8 @@ class Config(object):
             self.extended_help()
 
         self.output_format_elastic = args.elastic
+
+        self.colour_warnings_and_errors = args.colour
 
     @staticmethod
     def extended_help():
@@ -533,6 +533,15 @@ class Output(object):
         elif self.config.output_format == "json":
             self.print_output_json()
 
+    def colour_warnings_and_errors(self, field_value):
+        if self.config.show_warnings_and_errors and self.config.colour_warnings_and_errors:
+            if re.search(re.escape(self.config.error_sign) + "$", str(field_value).strip()):
+                field_value = BColors.FAIL + field_value + BColors.ENDC
+            elif re.search(re.escape(self.config.warning_sign) + "$", str(field_value).strip()):
+                field_value = BColors.WARNING + field_value + BColors.ENDC
+
+        return field_value
+
     def print_output_human_readable(self):
         self.separator = self.config.output_separator_char * self.separator_len
 
@@ -565,7 +574,7 @@ class Output(object):
                     prefix = " "
                     suffix = ": "
                 output_list = output_list[0:order_dict[key]] + \
-                              [prefix + str(key) + suffix + str(args[key])] + \
+                              [prefix + str(key) + suffix + str(self.colour_warnings_and_errors(args[key]))] + \
                               output_list[order_dict[key] + 1:]
 
         if output_list:
@@ -594,8 +603,9 @@ class Output(object):
 
             for key in line:
                 if key in order_dict:
-                    output_list = output_list[0:order_dict[key]] + \
-                                   [str("{0:^{width}}".format(line[key], width=self.column_width[key]))] + \
+                    field_value = str("{0:^{width}}".format(line[key], width=self.column_width[key]))
+                    field_value = self.colour_warnings_and_errors(field_value)
+                    output_list = output_list[0:order_dict[key]] + [field_value] + \
                                    output_list[order_dict[key] + 1:]
 
             count += 1
@@ -1242,6 +1252,17 @@ class DataSource(object):
     def cmd_to_str(cmd):
         output = re.escape(cmd)
         return output
+
+
+class BColors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 
 def extract_string_by_regex(data_string, regex, na_string="=N/A="):
