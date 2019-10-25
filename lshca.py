@@ -1082,8 +1082,7 @@ class MlnxBDFDevice(object):
                   "SwDescription": self.sw_description,
                   "VrtHCA": self.virt_hca,
                   "IpStat": self.ip_state,
-                  "RoCEstat": self.roce_status,
-                  "PSID": self.psid}
+                  "RoCEstat": self.roce_status}
         return output
 
 
