@@ -48,7 +48,7 @@ class Config(object):
         self.ver = "3.0"
 
         self.mst_device_enabled = False
-        self.saquery_device_enabled = False
+        self.sa_smp_query_device_enabled = False
 
         self.output_format = "human_readable"
         self.output_format_elastic = None
@@ -96,7 +96,7 @@ class Config(object):
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
-                              ib     - Show IB oriented HCA info. Implies "saquery" data source
+                              ib     - Show IB oriented HCA info. Implies "sasmpquery" data source
                               roce   - Show RoCE oriented HCA info"
                               all    - Show all available HCA info. Aggregates all above views + MST data source.
                               Note: all human readable output views are elastic. See extended help for more info.
@@ -106,15 +106,15 @@ class Config(object):
                             help="Set human readable output as non elastic")
         parser.add_argument('--no-colour', '--no-color', action='store_false', dest="colour",
                             help="Do not colour warrinings and errors.")
-        parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'saquery'], nargs='+', dest="sources",
+        parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'sasmpquery'], nargs='+', dest="sources",
                             help=textwrap.dedent('''\
                             add optional data sources (comma delimited list)
                             always on data sources are:
                               lspci    - provides lspci utility based info. Requires root for full output 
                               sysfs    - provides driver based info retrieved from /sys/
                             optional data sources:
-                              mst      - provides MST based info. This data source slows execution  
-                              saquery  - provides SA query based info of the IB network
+                              mst        - provides MST based info. This data source slows execution
+                              sasmpquery - provides SA/SMP query based info of the IB network
                             '''))
         parser.add_argument('-o', dest="output_fields_filter_positive", nargs="+",
                             help=textwrap.dedent('''\
@@ -149,7 +149,7 @@ class Config(object):
             self.debug = True
 
         if args.view == "ib":
-            self.saquery_device_enabled = True
+            self.sa_smp_query_device_enabled = True
             self.output_view = "ib"
         elif args.view == "roce":
             self.output_view = "roce"
@@ -157,7 +157,7 @@ class Config(object):
             self.output_view = "system"
         elif args.view == "all":
             self.mst_device_enabled = True
-            self.saquery_device_enabled = True
+            self.sa_smp_query_device_enabled = True
             self.output_view = "all"
 
         if self.output_view != "all":
@@ -185,8 +185,8 @@ class Config(object):
                     pass
                 elif data_source == "mst":
                     self.mst_device_enabled = True
-                elif data_source == "saquery":
-                    self.saquery_device_enabled = True
+                elif data_source == "sasmpquery":
+                    self.sa_smp_query_device_enabled = True
 
         if args.output_fields_filter_positive:
             self.output_fields_filter_positive = args.output_fields_filter_positive
@@ -903,14 +903,14 @@ class SYSFSDevice(object):
                self.numa
 
 
-class SAQueryDevice(object):
+class SaSmpQueryDevice(object):
     def __init__(self, rdma, port, plid, smlid, data_source, config):
         self.sw_guid = ""
         self.sw_description = ""
         self.sm_guid = ""
         self.config = config
 
-        if self.config.saquery_device_enabled:
+        if self.config.sa_smp_query_device_enabled:
             if "SMGuid" not in self.config.output_order:
                 self.config.output_order.append("SMGuid")
             if "SwGuid" not in self.config.output_order:
@@ -918,19 +918,18 @@ class SAQueryDevice(object):
             if "SwDescription" not in self.config.output_order:
                 self.config.output_order.append("SwDescription")
 
-            self.data = data_source.exec_shell_cmd("saquery LR -C " + rdma + " -P " + port + " " + plid)
-            self.sw_lid = self.get_info_from_saquery_data(".*ToLID.*", "\.+([0-9]+)")
-
-            self.data = data_source.exec_shell_cmd("saquery NR -C " + rdma + " -P " + port + " " + self.sw_lid)
-            self.sw_guid = self.get_info_from_saquery_data(".*node_guid.*", "\.+(.*)")
+            self.data = data_source.exec_shell_cmd("smpquery -C " + rdma + " -P " + port + " NI -D  0,1")
+            self.sw_guid = self.get_info_from_sa_smp_query_data(".*SystemGuid.*", "\.+(.*)")
             self.sw_guid = extract_string_by_regex(self.sw_guid, "0x(.*)")
-            self.sw_description = self.get_info_from_saquery_data(".*NodeDescription.*", "\.+(.*)")
+
+            self.data = data_source.exec_shell_cmd("smpquery -C " + rdma + " -P " + port + " ND -D  0,1")
+            self.sw_description = self.get_info_from_sa_smp_query_data(".*Node *Description.*", "\.+(.*)")
 
             self.data = data_source.exec_shell_cmd("saquery SMIR -C " + rdma + " -P " + port + " " + smlid)
-            self.sm_guid = self.get_info_from_saquery_data(".*GUID.*", "\.+(.*)")
+            self.sm_guid = self.get_info_from_sa_smp_query_data(".*GUID.*", "\.+(.*)")
             self.sm_guid = extract_string_by_regex(self.sm_guid, "0x(.*)")
 
-    def get_info_from_saquery_data(self, search_regex, output_regex):
+    def get_info_from_sa_smp_query_data(self, search_regex, output_regex):
         search_result = find_in_list(self.data, search_regex)
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
@@ -1016,11 +1015,11 @@ class MlnxBDFDevice(object):
         self.miscDevice = MiscCMDs(self.net, self.rdma, data_source, self.config)
         self.tempr = self.miscDevice.get_tempr()
 
-        self.saQueryDevice = SAQueryDevice(self.rdma, self.port, self.plid, self.smlid,
-                                           data_source, self.config)
-        self.sw_guid = self.saQueryDevice.sw_guid
-        self.sw_description = self.saQueryDevice.sw_description
-        self.sm_guid = self.saQueryDevice.sm_guid
+        self.sasmpQueryDevice = SaSmpQueryDevice(self.rdma, self.port, self.plid, self.smlid,
+                                                 data_source, self.config)
+        self.sw_guid = self.sasmpQueryDevice.sw_guid
+        self.sw_description = self.sasmpQueryDevice.sw_description
+        self.sm_guid = self.sasmpQueryDevice.sm_guid
 
     def __repr__(self):
         return self.sysFSDevice.__repr__() + "\n" + self.pciDevice.__repr__() + "\n" + \
