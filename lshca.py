@@ -27,12 +27,12 @@ class Config(object):
 
         self.output_view = "system"
         self.output_order_general = {
-                    "system": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                    "system": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                                "IpStat", "Link", "Rate", "SRIOV", "Parent_addr","Tempr", "LnkCapWidth", "LnkStaWidth",
                                "HCA_Type"],
-                    "ib": ["Dev", "Desc", "PN", "SN", "FW", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
+                    "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
                            "VrtHCA", "PLid", "PGuid", "IbNetPref"],
-                    "roce": ["Dev", "Desc", "PN", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                    "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "RoCEstat"]
         }
         self.output_order = self.output_order_general[self.output_view]
@@ -793,6 +793,9 @@ class SYSFSDevice(object):
         self.fw = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/fw_ver")
         self.fw = self.fw.rstrip()
 
+        self.psid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/board_id")
+        self.psid = self.psid.rstrip()
+
         self.port_rate = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
                                                          self.port + "/rate")
         self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
@@ -994,6 +997,7 @@ class MlnxBDFDevice(object):
         self.virt_hca = self.sysFSDevice.virt_hca
         self.vfParent = self.sysFSDevice.vfParent
         self.sys_image_guid = self.sysFSDevice.sys_image_guid
+        self.psid = self.sysFSDevice.psid
 
         self.pciDevice = PCIDevice(self.bdf, data_source, self.config)
         self.description = self.pciDevice.description
@@ -1079,7 +1083,8 @@ class MlnxBDFDevice(object):
                   "SwDescription": self.sw_description,
                   "VrtHCA": self.virt_hca,
                   "IpStat": self.ip_state,
-                  "RoCEstat": self.roce_status}
+                  "RoCEstat": self.roce_status,
+                  "PSID": self.psid}
         return output
 
 
@@ -1096,6 +1101,7 @@ class MlnxHCA(object):
         self.sn = bdf_dev.sn
         self.pn = bdf_dev.pn
         self.fw = bdf_dev.fw
+        self.psid = bdf_dev.psid
         self.sys_image_guid = bdf_dev.sys_image_guid
         self.description = bdf_dev.description
         self.tempr = bdf_dev.tempr
@@ -1127,6 +1133,7 @@ class MlnxHCA(object):
         output = {"SN": self.sn,
                   "PN": self.pn,
                   "FW": self.fw,
+                  "PSID": self.psid,
                   "Desc": self.description,
                   "Tempr": self.tempr,
                   "Dev": self.hca_index,
