@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import sys
 import StringIO
@@ -19,8 +20,8 @@ class DataSource(object):
                 self.config.record_tar_file = "%s/%s--%s.tar" % (self.config.record_dir, os.uname()[1],
                                                                  str(time.time()))
 
-            print "\nlshca.sh started data recording"
-            print "output saved in " + self.config.record_tar_file + " file\n"
+            print("\nlshca started data recording")
+            print("output saved in " + self.config.record_tar_file + " file\n")
 
             self.stdout = StringIO.StringIO()
             sys.stdout = self.stdout

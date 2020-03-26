@@ -9,7 +9,7 @@
 
 import lshca
 
-import os
+from __future__ import print_function
 import json
 import re
 import sre_constants
@@ -75,7 +75,7 @@ class Output(object):
             try:
                 output_filter[filter_key] = re.compile(output_filter[filter_key])
             except sre_constants.error:
-                print "Error: Invalid pattern \"%s\" passed to output filter " % output_filter[filter_key]
+                print("Error: Invalid pattern \"%s\" passed to output filter " % output_filter[filter_key])
                 sys.exit(1)
 
         for filter_key in output_filter:
@@ -214,15 +214,15 @@ class Output(object):
     def print_output_human_readable(self):
         self.separator = self.config.output_separator_char * self.separator_len
 
-        print self.separator
+        print(self.separator)
         for hca in self.output:
             self.print_hca_header(hca)
-            print self.separator
+            print(self.separator)
             self.print_bdf_devices(hca["bdf_devices"])
-            print self.separator
+            print(self.separator)
 
     def print_output_json(self):
-        print json.dumps(self.output, indent=4, sort_keys=True)
+        print(json.dumps(self.output, indent=4, sort_keys=True))
 
     def print_hca_header(self, args):
         order_dict = {}
@@ -247,7 +247,7 @@ class Output(object):
                               output_list[order_dict[key] + 1:]
 
         if output_list:
-            print '\n'.join(output_list)
+            print('\n'.join(output_list))
 
     def print_bdf_devices(self, args):
         count = 1
@@ -267,8 +267,8 @@ class Output(object):
                         output_list = output_list[0:order_dict[key]] + \
                                       [str("{0:^{width}}".format(key, width=self.column_width[key]))] + \
                                       output_list[order_dict[key] + 1:]
-                print ' | '.join(output_list)
-                print self.separator
+                print(' | '.join(output_list))
+                print(self.separator)
 
             for key in line:
                 if key in order_dict:
@@ -278,7 +278,7 @@ class Output(object):
                                    output_list[order_dict[key] + 1:]
 
             count += 1
-            print ' | '.join(output_list)
+            print(' | '.join(output_list))
 
 
 def main():
