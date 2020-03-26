@@ -1,3 +1,4 @@
+from __future__ import print_function
 import argparse
 import textwrap
 import sys
@@ -190,7 +191,7 @@ class Config(object):
 
     @staticmethod
     def extended_help():
-        print textwrap.dedent("""
+        print(textwrap.dedent("""
         --== Detailed fields description ==--
         Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
 
@@ -263,5 +264,5 @@ class Config(object):
         LnkStat      - if all LnkStat valuse are "actv"
         IpStat       - if all LnkStat valuse are "down"
 
-        """)
+        """))
         sys.exit(0)

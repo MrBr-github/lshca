@@ -1,4 +1,6 @@
 import service_function
+
+from __future__ import print_function
 import re
 import sys
 import os
@@ -22,7 +24,7 @@ class SYSFSDevice(object):
 
         self.numa = data_source.read_file_if_exists(sys_prefix + "/numa_node").rstrip()
         if not self.numa:
-            print >> sys.stderr, "Warning: " + self.bdf + " has no NUMA assignment"
+            print("Warning: %s has no NUMA assignment" % self.bdf, file=sys.stderr)
 
         self.rdma = data_source.list_dir_if_exists(sys_prefix + "/infiniband/").rstrip()
         net_list = data_source.list_dir_if_exists(sys_prefix + "/net/")

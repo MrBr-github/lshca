@@ -1,4 +1,6 @@
 import service_function
+
+from __future__ import print_function
 import sys
 
 
@@ -52,7 +54,7 @@ class MSTDevice(object):
                         mst_device = service_function.extract_string_by_regex(data_line, ".* (/dev/mst/[^\s]+) .*")
                         self.mst_device = mst_device
             else:
-                print >> sys.stderr, "\n\nError: MST tool is missing\n\n"
+                print("\n\nError: MST tool is missing\n\n", file=sys.stderr)
                 # Disable further use.access to mst device
                 self.config.mst_device_enabled = False
 
