@@ -13,10 +13,7 @@ class MSTDevice(object):
         self.bdf_short_format = True
         mst_init_running = False
 
-        if self.config.mst_device_enabled:
-            if "MST_device" not in self.config.output_order:
-                self.config.output_order.append("MST_device")
-
+        if self.config.query_preset[self.config.QPRESET_MST]:
             result = data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
             if result == ["0"]:
                 mst_installed = True

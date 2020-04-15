@@ -82,11 +82,11 @@ class RawMlnxBDFDevice(object):
         if self.link_layer != "Eth":
             return "N/A"
 
-        if self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass and \
-                self.sysFSDevice.tcp_ecn == self.config.lossless_roce_expected_tcp_ecn and \
-                self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos and \
-                self.miscDevice.get_mlnx_qos_trust() == self.config.lossless_roce_expected_trust and \
-                self.miscDevice.get_mlnx_qos_pfc() == self.config.lossless_roce_expected_pfc:
+        if self.sysFSDevice.gtclass == self.config._lossless_roce_expected_gtclass and \
+                self.sysFSDevice.tcp_ecn == self.config._lossless_roce_expected_tcp_ecn and \
+                self.sysFSDevice.rdma_cm_tos == self.config._lossless_roce_expected_rdma_cm_tos and \
+                self.miscDevice.get_mlnx_qos_trust() == self.config._lossless_roce_expected_trust and \
+                self.miscDevice.get_mlnx_qos_pfc() == self.config._lossless_roce_expected_pfc:
             return "Lossless"
         else:
             return "Lossy"

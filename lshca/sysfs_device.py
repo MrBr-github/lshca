@@ -168,7 +168,7 @@ class SYSFSDevice(object):
         self.tcp_ecn = None
         self.rdma_cm_tos = None
 
-        if self.config.QPRESET_ROCE:
+        if self.config.query_preset[self.config.QPRESET_ROCE]:
             self.gtclass = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                            "/tc/1/traffic_class").rstrip()
             self.tcp_ecn = data_source.read_file_if_exists("/proc/sys/net/ipv4/tcp_ecn").rstrip()
