@@ -13,6 +13,7 @@ class HCAManager(object):
             raise OSError("You need to have root privileges to run this script")
 
         if type(config) is not Config:
+            print(type(config))
             raise ValueError("Config type have to be Config")
 
         self.mlnx_hcas = []

@@ -8,13 +8,7 @@ class SaSmpQueryDevice(object):
         self.sm_guid = ""
         self.config = config
 
-        if self.config.sa_smp_query_device_enabled:
-            if "SMGuid" not in self.config.output_order:
-                self.config.output_order.append("SMGuid")
-            if "SwGuid" not in self.config.output_order:
-                self.config.output_order.append("SwGuid")
-            if "SwDescription" not in self.config.output_order:
-                self.config.output_order.append("SwDescription")
+        if self.config.query_preset[self.config.QPRESET_IB]:
 
             self.data = data_source.exec_shell_cmd("smpquery -C " + rdma + " -P " + port + " NI -D  0,1")
             self.sw_guid = self.get_info_from_sa_smp_query_data(".*SystemGuid.*", "\.+(.*)")
