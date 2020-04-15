@@ -1,9 +1,9 @@
-import service_function
-
 from __future__ import print_function
 import re
 import sys
 import os
+
+import service_function
 
 
 class SYSFSDevice(object):
