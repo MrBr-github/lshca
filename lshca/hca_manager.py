@@ -1,5 +1,4 @@
 import os
-import sys
 
 import service_function
 from config import Config
@@ -9,15 +8,16 @@ from mlx_hca import MlnxHCA
 
 
 class HCAManager(object):
-    def __init__(self):
+    def __init__(self, config):
         if os.geteuid() != 0:
             raise OSError("You need to have root privileges to run this script")
+
+        if type(config) is not Config:
+            raise ValueError("Config type have to be Config")
 
         self.mlnx_hcas = []
         mlnx_bdf_list = []
 
-        config = Config()
-        config.parse_arguments(sys.argv[1:])
         data_source = DataSource(config)
 
         # Same lspci cmd used in MST source in order to benefit from cache
