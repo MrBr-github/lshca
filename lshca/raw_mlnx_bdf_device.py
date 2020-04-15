@@ -1,10 +1,10 @@
+import re
+
 from sysfs_device import SYSFSDevice
 from pci_device import PCIDevice
 from mst_device import MSTDevice
 from misc_cmds import MiscCMDs
 from sa_smpquery_device import SaSmpQueryDevice
-
-import re
 
 
 class RawMlnxBDFDevice(object):

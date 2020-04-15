@@ -1,11 +1,11 @@
+import os
+import sys
+
 import service_function
 from config import Config
 from datasource import DataSource
 from raw_mlnx_bdf_device import RawMlnxBDFDevice as MlnxBDFDevice
 from mlx_hca import MlnxHCA
-
-import os
-import sys
 
 
 class HCAManager(object):

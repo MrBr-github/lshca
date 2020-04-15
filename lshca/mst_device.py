@@ -1,7 +1,7 @@
-import service_function
-
 from __future__ import print_function
 import sys
+
+import service_function
 
 
 class MSTDevice(object):
