@@ -53,6 +53,8 @@ class CliConfig(object):
         self.output_fields_filter_negative = ""
         self.where_output_filter = ""
 
+        self.ver = "1.0"
+
     def parse_arguments(self, user_args):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
                                          epilog=textwrap.dedent('''\
@@ -77,7 +79,8 @@ class CliConfig(object):
                             help="output data as JSON, affected by output selection flag")
         parser.add_argument('-of', choices=["human_readable", "json", "module"], dest="output_format",
                             help="set output format.")
-        parser.add_argument('-v', '--version', action='version', version=str('%(prog)s ver. ' + self.lib_config.ver))
+        parser.add_argument('-v', '--version', action='version', version=str(
+                              'lshca cli ver. %s\nlshca lib ver. %s' % (self.ver, self.lib_config.ver)))
         parser.add_argument('-m', choices=["normal", "record"], default="normal", dest="mode",
                             help=textwrap.dedent('''\
                             mode of operation (default: %(default)s):
