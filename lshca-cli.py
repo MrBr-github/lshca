@@ -72,22 +72,22 @@ class CliConfig(object):
 
                         '''))
 
-        parser.add_argument('-hh', action='store_true', dest="extended_help",
+        parser.add_argument("-hh", action="store_true", dest="extended_help",
                             help="show extended help message and exit. All fields description and more")
-        parser.add_argument('-d', action='store_true', dest="debug", help="run with debug outputs")
-        parser.add_argument('-j', action='store_true', dest="json",
+        parser.add_argument("-d", action="store_true", dest="debug", help="run with debug outputs")
+        parser.add_argument("-j", action="store_true", dest="json",
                             help="output data as JSON, affected by output selection flag")
-        parser.add_argument('-of', choices=["human_readable", "json", "module"], dest="output_format",
+        parser.add_argument("-of", choices=["human_readable", "json", "module"], dest="output_format",
                             help="set output format.")
-        parser.add_argument('-v', '--version', action='version', version=str(
-                              'lshca cli ver. %s\nlshca lib ver. %s' % (self.ver, self.lib_config.ver)))
-        parser.add_argument('-m', choices=["normal", "record"], default="normal", dest="mode",
+        parser.add_argument("-v", "--version", action="version", version=str(
+                              "lshca cli ver. %s\nlshca lib ver. %s" % (self.ver, self.lib_config.ver)))
+        parser.add_argument("-m", choices=["normal", "record"], default="normal", dest="mode",
                             help=textwrap.dedent('''\
                             mode of operation (default: %(default)s):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'all'], default='system', dest="view",
+        parser.add_argument("-w", choices=["system", "ib", "roce", "all"], default="system", dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
@@ -97,11 +97,11 @@ class CliConfig(object):
                               Note: all human readable output views are elastic. See extended help for more info.
                             ''')
                             )
-        parser.add_argument('--non-elastic', action='store_false', dest="elastic",
+        parser.add_argument("--non-elastic", action="store_false", dest="elastic",
                             help="Set human readable output as non elastic")
-        parser.add_argument('--no-colour', '--no-color', action='store_false', dest="colour",
+        parser.add_argument("--no-colour", "--no-color", action="store_false", dest="colour",
                             help="Do not colour warrinings and errors.")
-        parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'sasmpquery'], nargs='+', dest="sources",
+        parser.add_argument("-s", choices=["lspci", "sysfs", "mst", "sasmpquery"], nargs="+", dest="sources",
                             help=textwrap.dedent('''\
                             add optional data sources (comma delimited list)
                             always on data sources are:
@@ -111,16 +111,16 @@ class CliConfig(object):
                               mst        - provides MST based info. This data source slows execution
                               sasmpquery - provides SA/SMP query based info of the IB network
                             '''))
-        parser.add_argument('-o', dest="output_fields_filter_positive", nargs="+",
+        parser.add_argument("-o", dest="output_fields_filter_positive", nargs="+",
                             help=textwrap.dedent('''\
                             SELECT fields to output (comma delimited list). Use field names as they appear in output
                             '''))
-        parser.add_argument('-onot', dest="output_fields_filter_negative", nargs="+",
+        parser.add_argument("-onot", dest="output_fields_filter_negative", nargs="+",
                             help=textwrap.dedent('''\
                             REMOVE fields from default output (comma delimited list).
                             Use field names as they appear in output. -o takes precedence
                             '''))
-        parser.add_argument('-ow', dest="output_fields_value_filter", nargs='+',
+        parser.add_argument("-ow", dest="output_fields_value_filter", nargs="+",
                             help=textwrap.dedent('''\
                             select fields to output, WHERE field value is regex: field_name=value
                             (comma delimited list). Use field names as they appear in output
