@@ -160,15 +160,13 @@ class CliConfig(object):
         if self.output_view != "all":
             self.output_order = self.output_order_general[self.output_view]
         else:
-            i = 0
-            for view in self.output_order_general:
+            for i, view in enumerate(self.output_order_general):
                 if i == 0:
                     self.output_order = self.output_order_general[view]
                 else:
                     for key in self.output_order_general[view]:
                         if key not in self.output_order:
                             self.output_order.append(key)
-                i += 1
 
         if args.json:
             self.output_format = "json"
