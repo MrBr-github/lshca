@@ -29,7 +29,7 @@ class Config(object):
         self.output_order_general = {
                     "system": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                                "IpStat", "Link", "Rate", "SRIOV", "Parent_addr","Tempr", "LnkCapWidth", "LnkStaWidth",
-                               "HCA_Type"],
+                               "HCA_Type", "Bond", "BondState", "BondMiiStat"],
                     "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
                            "VrtHCA", "PLid", "PGuid", "IbNetPref"],
                     "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
@@ -872,6 +872,15 @@ class SYSFSDevice(object):
         self.sys_image_guid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
                                                               "/sys_image_guid").rstrip()
 
+        self.bond_mii_status = data_source.read_file_if_exists(sys_prefix + "/net/" + self.net +
+                                                              "/bonding_slave/mii_status").rstrip()
+        self.bond_state = data_source.read_file_if_exists(sys_prefix + "/net/" + self.net +
+                                                              "/bonding_slave/state").rstrip()
+
+        tmp = data_source.list_dir_if_exists(sys_prefix + "/net/" + self.net).split(" ")
+        bond_master_dir = find_in_list(tmp, "upper_.*").rstrip()
+        self.bond_master = extract_string_by_regex(bond_master_dir, "upper_([A-Za-z0-9]+)$")
+
         # ========== RoCE view only related variables ==========
         self.gtclass = None
         self.tcp_ecn = None
@@ -998,6 +1007,9 @@ class MlnxBDFDevice(object):
         self.vfParent = self.sysFSDevice.vfParent
         self.sys_image_guid = self.sysFSDevice.sys_image_guid
         self.psid = self.sysFSDevice.psid
+        self.bond_master = self.sysFSDevice.bond_master
+        self.bond_state = self.sysFSDevice.bond_state
+        self.bond_mii_status = self.sysFSDevice.bond_mii_status
 
         self.pciDevice = PCIDevice(self.bdf, data_source, self.config)
         self.description = self.pciDevice.description
@@ -1083,7 +1095,10 @@ class MlnxBDFDevice(object):
                   "SwDescription": self.sw_description,
                   "VrtHCA": self.virt_hca,
                   "IpStat": self.ip_state,
-                  "RoCEstat": self.roce_status}
+                  "RoCEstat": self.roce_status,
+                  "Bond": self.bond_master,
+                  "BondState": self.bond_state,
+                  "BondMiiStat": self.bond_mii_status}
         return output
 
 
