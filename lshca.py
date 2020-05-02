@@ -311,16 +311,31 @@ class HCAManager(object):
         self.mlnxHCAs = []
         # First handle all PFs
         for bdf_dev in mlnx_bdf_devices:
+            rdma_bond_bdf = None
+
+            if extract_string_by_regex(bdf_dev.rdma, ".*(bond)_.*", ""):
+                rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, data_source, self.config)
+                rdma_bond_bdf.fix_rdma_bond(data_source)
+
+                bdf_dev.rdma = ""
+                bdf_dev.lnk_state = ""
+
             if bdf_dev.sriov in ("PF", "PF" + self.config.warning_sign):
                 hca_found = False
                 for hca in self.mlnxHCAs:
                     if hca.sys_image_guid and bdf_dev.sys_image_guid == hca.sys_image_guid or \
                       bdf_dev.sn == hca.sn:
                         hca_found = True
+                        if rdma_bond_bdf:
+                            hca.add_bdf_dev(rdma_bond_bdf)
                         hca.add_bdf_dev(bdf_dev)
 
                 if not hca_found:
-                    hca = MlnxHCA(bdf_dev,  self.config)
+                    if rdma_bond_bdf:
+                        hca = MlnxHCA(rdma_bond_bdf, self.config)
+                        hca.add_bdf_dev(bdf_dev)
+                    else:
+                        hca = MlnxHCA(bdf_dev,  self.config)
                     hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
 
@@ -1155,6 +1170,45 @@ class MlnxHCA(object):
         for bdf_dev in self.bdf_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
         return output
+
+
+class MlnxRdmaBondDevice(MlnxBDFDevice):
+    def fix_rdma_bond(self, data_source):
+        index = extract_string_by_regex(self.rdma, ".*([0-9]+)$")
+        self.bdf = "rdma_bond_" + index
+        self.net = self.bond_master
+        self.bond_master = ""
+        self.bond_mii_status = ""
+        self.bond_state = ""
+
+        # TBD
+        # /sys/class/net/vava0/bonding/miimon
+
+        operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
+        self.ip_state = None
+        if operstate == "up":
+            # Implemented via shell cmd to avoid using non default libraries
+            interface_data = data_source.exec_shell_cmd(" ip address show dev %s" % self.net)
+            ipv4_data = find_in_list(interface_data, "inet .+")
+            ipv6_data = find_in_list(interface_data, "inet6 .+")
+            if ipv4_data and ipv6_data:
+                self.ip_state = "up_ip46"
+            elif ipv4_data:
+                self.ip_state = "up_ip4"
+            elif ipv6_data:
+                self.ip_state = "up_ip6"
+            else:
+                self.ip_state = "up_noip"
+        elif not operstate:
+            self.ip_state = ""
+        else:
+            self.ip_state = "down"
+
+        if self.ip_state == "down" and self.lnk_state == "actv" \
+                and self.config.show_warnings_and_errors is True:
+            self.ip_state = self.ip_state + self.config.error_sign
+        if self.ip_state == "up_noip" and self.config.show_warnings_and_errors is True:
+            self.ip_state = self.ip_state + self.config.warning_sign
 
 
 class DataSource(object):
