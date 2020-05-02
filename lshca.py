@@ -858,6 +858,14 @@ class SYSFSDevice(object):
         else:
             self.virt_hca = ""
 
+        self.sys_image_guid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
+                                                              "/sys_image_guid").rstrip()
+
+        self.bond_mii_status = data_source.read_file_if_exists(sys_prefix + "/net/" + self.net +
+                                                              "/bonding_slave/mii_status").rstrip()
+        self.bond_state = data_source.read_file_if_exists(sys_prefix + "/net/" + self.net +
+                                                              "/bonding_slave/state").rstrip()
+
         self.operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
         self.ip_state = None
         if self.operstate == "up":
@@ -872,29 +880,24 @@ class SYSFSDevice(object):
             elif ipv6_data:
                 self.ip_state = "up_ip6"
             else:
-                self.ip_state = "up_noip"
+                if self.bond_state:
+                    self.ip_state = "up"
+                else:
+                    self.ip_state = "up_noip"
         elif not self.operstate:
             self.ip_state = ""
         else:
             self.ip_state = "down"
 
-        if self.ip_state == "down" and self.lnk_state == "actv" \
+        tmp = data_source.list_dir_if_exists(sys_prefix + "/net/" + self.net).split(" ")
+        bond_master_dir = find_in_list(tmp, "upper_.*").rstrip()
+        self.bond_master = extract_string_by_regex(bond_master_dir, "upper_([A-Za-z0-9]+)$")
+
+        if self.ip_state == "down" and ( self.lnk_state == "actv" or self.bond_state ) \
                 and self.config.show_warnings_and_errors is True:
             self.ip_state = self.ip_state + self.config.error_sign
         if self.ip_state == "up_noip" and self.config.show_warnings_and_errors is True:
             self.ip_state = self.ip_state + self.config.warning_sign
-
-        self.sys_image_guid = data_source.read_file_if_exists(sys_prefix + "/infiniband/" + self.rdma +
-                                                              "/sys_image_guid").rstrip()
-
-        self.bond_mii_status = data_source.read_file_if_exists(sys_prefix + "/net/" + self.net +
-                                                              "/bonding_slave/mii_status").rstrip()
-        self.bond_state = data_source.read_file_if_exists(sys_prefix + "/net/" + self.net +
-                                                              "/bonding_slave/state").rstrip()
-
-        tmp = data_source.list_dir_if_exists(sys_prefix + "/net/" + self.net).split(" ")
-        bond_master_dir = find_in_list(tmp, "upper_.*").rstrip()
-        self.bond_master = extract_string_by_regex(bond_master_dir, "upper_([A-Za-z0-9]+)$")
 
         # ========== RoCE view only related variables ==========
         self.gtclass = None
