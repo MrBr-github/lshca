@@ -314,7 +314,8 @@ class HCAManager(object):
             if bdf_dev.sriov in ("PF", "PF" + self.config.warning_sign):
                 hca_found = False
                 for hca in self.mlnxHCAs:
-                    if bdf_dev.sys_image_guid == hca.sys_image_guid:
+                    if hca.sys_image_guid and bdf_dev.sys_image_guid == hca.sys_image_guid or \
+                      bdf_dev.sn == hca.sn:
                         hca_found = True
                         hca.add_bdf_dev(bdf_dev)
 
