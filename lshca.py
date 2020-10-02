@@ -453,6 +453,7 @@ class Output(object):
             remove_port = True
             remove_lnk_stat = True
             remove_ip_stat = True
+            remove_bond = True
 
             for bdf_device in hca["bdf_devices"]:
                 # ---- Removing SRIOV and Parent_addr if no VFs present
@@ -482,6 +483,11 @@ class Output(object):
                     if bdf_device["LnkStat"].strip() != "actv":
                         remove_lnk_stat = False
 
+                # ---- Remove bond related fields if no bond configured
+                if "Bond" in bdf_device:
+                    if bdf_device["Bond"].strip() and bdf_device["Bond"].strip() != "=N/A=":
+                        remove_bond = False
+
             if remove_sriov_and_parent:
                 hca_fields_for_removal.append("SRIOV")
                 hca_fields_for_removal.append("Parent_addr")
@@ -493,6 +499,10 @@ class Output(object):
                 hca_fields_for_removal.append("IpStat")
             if remove_lnk_stat:
                 hca_fields_for_removal.append("LnkStat")
+            if remove_bond:
+                hca_fields_for_removal.append("Bond")
+                hca_fields_for_removal.append("BondState")
+                hca_fields_for_removal.append("BondMiiStat")
 
             for field in hca_fields_for_removal:
                 if field in hca:
