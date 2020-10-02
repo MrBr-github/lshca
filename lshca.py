@@ -28,7 +28,7 @@ class Config(object):
         self.output_view = "system"
         self.output_order_general = {
                     "system": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
-                               "IpStat", "Link", "Rate", "SRIOV", "Parent_addr","Tempr", "LnkCapWidth", "LnkStaWidth",
+                               "IpStat", "Link", "Rate", "SRIOV", "Parent_addr", "Tempr", "LnkCapWidth", "LnkStaWidth",
                                "HCA_Type", "Bond", "BondState", "BondMiiStat"],
                     "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
                            "VrtHCA", "PLid", "PGuid", "IbNetPref"],
@@ -216,6 +216,7 @@ class Config(object):
           FW    - HCA currently running firmware version
           PN    - HCA part number including revision
           SN    - HCA serial number
+          PSID  - HCA PSID number (Parameter Set ID)
           Tempr - HCA temperature. Based on mget_temp utility from MFT
 
         BDF devices:
@@ -251,6 +252,9 @@ class Config(object):
           SRIOV         - SRIOV function type. Possible values:
                             PF - Physical Function
                             VF - Virtual Function
+          Bond          - Name of Bond parent
+          BondState     - Interface status in a bond. Search for bonding.txt in kernel.org for detailed information
+          BondMiiStat   - Interface mii status in a bond. Search for bonding.txt in kernel.org for detailed information
 
          IB view
           IbNetPref     - IB network preffix
@@ -272,12 +276,14 @@ class Config(object):
         --== Elastic view rules ==--
         Elastic view comes to reduce excessive information in human readable output.
         Following will be removed per HCA if the condition is True
-        SRIOV        - if all SRIOV are PF
-        Parent_addr  - if all SRIOV are PF
+        SRIOV, Parent_addr
+                     - if there is no SRIOV VF
         LnkStaWidth  - if LnkStaWidth matches LnkCapWidth
         Port         - if all Port values are 1
         LnkStat      - if all LnkStat valuse are "actv"
         IpStat       - if all LnkStat valuse are "down"
+        Bond, BondState, BondMiiStat
+                     - if no bond device configured
 
         """)
         sys.exit(0)
