@@ -1,3 +1,10 @@
+# Description: Part of lshca-lib library
+#
+# Author: Michael Braverman
+# Email: mrbr.mail@gmail.com
+# Project repo: https://gitlab.com/MrBr-gitlab/lshca/
+# License: This utility provided under GNU GPLv3 license
+
 import re
 
 from sysfs_device import SYSFSDevice
