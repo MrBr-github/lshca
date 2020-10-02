@@ -15,7 +15,7 @@ import sre_constants
 import sys
 import textwrap
 
-import lshca
+import lshca-lib
 
 
 class BColors:
