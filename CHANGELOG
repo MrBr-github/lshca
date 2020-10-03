@@ -1,3 +1,13 @@
+Ver. 3.1
+    - Feature: Added elastic output option. It eliminates meaningless fields from human readable output
+               For elastic output rules see help. Enabled by default. Can be switched off by --non-elastic param.
+    - Feature: Added bonded interfaces support. New fields are: Bond, BondState, BondMiiStat
+    - Feature: Added "all" view. This view show all possible information.
+    - Feature: Added "poll" to LnkStat
+    - Feature: Added color to errors and warnings
+    - Feature: Added PSID field to HCA header
+    - Change:  "hca_info" key was removed from json output. All its child fields remain, but now 1 level up
+    - Change:  Operstate was renamed to IpState and field values added. See help for more info.
 Ver. 3.0
     - Feature: Added RoCE view. New fields are: Operstate and RoCEstat
     - Feature: Added HCA temperature reading to HCA header

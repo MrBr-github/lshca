@@ -45,7 +45,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "3.0"
+        self.ver = "3.1"
 
         self.mst_device_enabled = False
         self.sa_smp_query_device_enabled = False
@@ -273,8 +273,8 @@ class Config(object):
                             Lossy    - Port configured with Lossy port configurations
 
 
-        --== Elastic view rules ==--
-        Elastic view comes to reduce excessive information in human readable output.
+        --== Elastic output rules ==--
+        Elastic output comes to reduce excessive information in human readable output.
         Following will be removed per HCA if the condition is True
         SRIOV, Parent_addr
                      - if there is no SRIOV VF
