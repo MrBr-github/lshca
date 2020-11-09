@@ -236,9 +236,9 @@ class Config(object):
                                Operstate/IP address configured
                         down    - down/no ip addr. configured
                         up_noip - up/no ip addr. configured
-                        ip_ipv4 - up/ipv4 addr. configured
-                        ip_ipv6 - up/ipv6 addr. configured
-                        ip_ipv6 - up/both ipv4 and ipv6 addr. configured
+                        up_ip4  - up/ipv4 addr. configured
+                        up_ip6  - up/ipv6 addr. configured
+                        up_ip46 - up/both ipv4 and ipv6 addr. configured
 
          System view
           HCA_Type      - Channel Adapter type, as appears in "ibstat"
