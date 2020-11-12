@@ -907,7 +907,7 @@ class SYSFSDevice(object):
 
         tmp = data_source.list_dir_if_exists(sys_prefix + "/net/" + self.net).split(" ")
         bond_master_dir = find_in_list(tmp, "upper_.*").rstrip()
-        self.bond_master = extract_string_by_regex(bond_master_dir, "upper_([A-Za-z0-9]+)$")
+        self.bond_master = extract_string_by_regex(bond_master_dir, "upper_(.*)$")
 
         if self.ip_state == "down" and ( self.lnk_state == "actv" or self.bond_state ) \
                 and self.config.show_warnings_and_errors is True:
