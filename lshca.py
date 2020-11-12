@@ -1270,7 +1270,7 @@ class DataSource(object):
             output = self.cache[cache_key]
 
         else:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, executable="/bin/bash")
             output, error = process.communicate()
             if use_cache is True:
                 self.cache.update({cache_key: output})
