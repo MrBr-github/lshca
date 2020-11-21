@@ -4,7 +4,7 @@
 #              It's mainly intended for system administrators, thus defaults configured accordingly.
 # Author: Michael Braverman
 # Email: mrbr.mail@gmail.com
-# Project repo: https://gitlab.com/MrBr-gitlab/lshca/
+# Project repo: https://github.com/MrBr-github/lshca
 # License: This utility provided under GNU GPLv3 license
 
 import os
@@ -45,7 +45,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "3.2"
+        self.ver = "3.3"
 
         self.mst_device_enabled = False
         self.sa_smp_query_device_enabled = False

@@ -1,3 +1,5 @@
+Ver. 3.3
+    - Feature: Adjusted project for PyPI publishing
 Ver. 3.2
     - Fixed bug: set default shell to bash. Comes to fix execution on Ubuntu
     - Fixed bug: fixed bond naming identification
