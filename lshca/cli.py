@@ -3,8 +3,7 @@
 # Description: This utility comes to provide bird's-eye view of HCAs installed.
 #              It's mainly intended for system administrators, thus defaults configured accordingly.
 # Author: Michael Braverman
-# Email: mrbr.mail@gmail.com
-# Project repo: https://gitlab.com/MrBr-gitlab/lshca/
+# Project repo: https://github.com/MrBr-github/lshca
 # License: This utility provided under GNU GPLv3 license
 
 from __future__ import print_function
@@ -15,7 +14,8 @@ import sre_constants
 import sys
 import textwrap
 
-import lshca
+from hca_manager import HCAManager
+from config import Config
 
 
 class BColors:
@@ -544,12 +544,12 @@ class Output(object):
 
 
 def main():
-    lib_config = lshca.Config()
+    lib_config = Config()
     cli_config = CliConfig(lib_config)
     cli_config.parse_arguments(sys.argv[1:])
 
     try:
-        hca_manager = lshca.HCAManager(lib_config)
+        hca_manager = HCAManager(lib_config)
     except OSError as e:
         exit(e.message)
 

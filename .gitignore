@@ -1,3 +1,7 @@
 recorded_data
 *.pyc
 .idea
+recorded_data
+dist
+MANIFEST
+lshca.egg-info

@@ -1,8 +1,7 @@
-# Description: Part of lshca-lib library
+# Description: Part of lshca library
 #
 # Author: Michael Braverman
-# Email: mrbr.mail@gmail.com
-# Project repo: https://gitlab.com/MrBr-gitlab/lshca/
+# Project repo: https://github.com/MrBr-github/lshca
 # License: This utility provided under GNU GPLv3 license
 
 import service_function
