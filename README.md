@@ -14,10 +14,6 @@ They are mainly intended for system administrators, thus defaults configured acc
 # Limitations
  * requires root, this comes from lspci limitation to provide full information to non-root users
 
-# Future development
-* Python3 support
-* YAML output
-
 # Examples
 ## CLI System view
 ConnectX6 socket direct 200G and ConnectX5 100G HCAs. 

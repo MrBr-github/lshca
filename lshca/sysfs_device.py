@@ -9,7 +9,10 @@ import re
 import sys
 import os
 
-import service_function
+if sys.version_info.major == 3:
+    from . import service_function
+else:
+    import service_function
 
 
 class SYSFSDevice(object):

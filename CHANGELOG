@@ -1,5 +1,6 @@
 Ver. 4.0
     - Feature: Converted lshca utility to library
+    - Feature: Added Python3 support
 Ver. 3.0
     - Feature: Added RoCE view. New fields are: Operstate and RoCEstat
     - Feature: Added HCA temperature reading to HCA header

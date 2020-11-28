@@ -4,7 +4,11 @@
 # Project repo: https://github.com/MrBr-github/lshca
 # License: This utility provided under GNU GPLv3 license
 
-import service_function
+import sys
+if sys.version_info.major == 3:
+    from . import service_function
+else:
+    import service_function
 
 
 class PCIDevice(object):

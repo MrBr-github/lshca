@@ -7,7 +7,10 @@
 from __future__ import print_function
 import sys
 
-import service_function
+if sys.version_info.major == 3:
+    from . import service_function
+else:
+    import service_function
 
 
 class MSTDevice(object):

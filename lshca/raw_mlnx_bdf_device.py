@@ -5,12 +5,20 @@
 # License: This utility provided under GNU GPLv3 license
 
 import re
+import sys
 
-from sysfs_device import SYSFSDevice
-from pci_device import PCIDevice
-from mst_device import MSTDevice
-from misc_cmds import MiscCMDs
-from sa_smpquery_device import SaSmpQueryDevice
+if sys.version_info.major == 3:
+    from .sysfs_device import SYSFSDevice
+    from .pci_device import PCIDevice
+    from .mst_device import MSTDevice
+    from .misc_cmds import MiscCMDs
+    from .sa_smpquery_device import SaSmpQueryDevice
+else:
+    from sysfs_device import SYSFSDevice
+    from pci_device import PCIDevice
+    from mst_device import MSTDevice
+    from misc_cmds import MiscCMDs
+    from sa_smpquery_device import SaSmpQueryDevice
 
 
 class RawMlnxBDFDevice(object):

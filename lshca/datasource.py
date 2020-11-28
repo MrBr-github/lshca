@@ -7,12 +7,15 @@
 from __future__ import print_function
 import os
 import sys
-import StringIO
 import subprocess
 import pickle
 import tarfile
 import time
 import re
+if sys.version_info.major == 3:
+    from io import StringIO
+else:
+    import StringIO
 
 
 class DataSource(object):

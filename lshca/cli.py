@@ -1,5 +1,3 @@
-#!/usr/bin/env python2
-
 # Description: This utility comes to provide bird's-eye view of HCAs installed.
 #              It's mainly intended for system administrators, thus defaults configured accordingly.
 # Author: Michael Braverman
@@ -14,8 +12,12 @@ import sre_constants
 import sys
 import textwrap
 
-from hca_manager import HCAManager
-from config import Config
+if sys.version_info.major == 3:
+    from .hca_manager import HCAManager
+    from .config import Config
+else:
+    from hca_manager import HCAManager
+    from config import Config
 
 
 class BColors:
