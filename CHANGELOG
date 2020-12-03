@@ -1,3 +1,8 @@
+Ver. 3.3
+    - Feature: Adjusted project for PyPI publishing
+Ver. 3.2
+    - Fixed bug: set default shell to bash. Comes to fix execution on Ubuntu
+    - Fixed bug: fixed bond naming identification
 Ver. 3.1
     - Feature: Added elastic output option. It eliminates meaningless fields from human readable output
                For elastic output rules see help. Enabled by default. Can be switched off by --non-elastic param.
@@ -36,4 +41,4 @@ Ver. 2.4
 Ver. 2.3
     - Feature: added MST info source
     This brought python version of lshca to same functionality as bash version
-    
+
