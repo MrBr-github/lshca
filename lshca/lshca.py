@@ -319,7 +319,8 @@ class HCAManager(object):
         for bdf_dev in mlnx_bdf_devices:
             rdma_bond_bdf = None
 
-            if extract_string_by_regex(bdf_dev.rdma, ".*(bond)_.*", ""):
+            # Only first slave interface in a bond has infiniband information on his sysfs
+            if bdf_dev.bond_master != "" and bdf_dev.rdma != "" :
                 rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, data_source, self.config)
                 rdma_bond_bdf.fix_rdma_bond(data_source)
 
