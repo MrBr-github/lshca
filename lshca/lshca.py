@@ -253,7 +253,9 @@ class Config(object):
                             PF - Physical Function
                             VF - Virtual Function
           Bond          - Name of Bond parent
-          BondState     - Interface status in a bond. Search for bonding.txt in kernel.org for detailed information
+          BondState     - On slave interface - status in a bond
+                          On master interface - bonding policy appended by xmit hash policy if relevant
+                          Search for bonding.txt in kernel.org for detailed information
           BondMiiStat   - Interface mii status in a bond. Search for bonding.txt in kernel.org for detailed information
 
          IB view
@@ -1200,13 +1202,15 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.net = self.bond_master
         self.bond_master = ""
         self.bond_mii_status = ""
-        self.bond_state = ""
+        self.ip_state = None
+
+
+        sys_prefix = "/sys/devices/virtual/net/" + self.net
 
         # TBD
         # /sys/class/net/vava0/bonding/miimon
 
-        operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
-        self.ip_state = None
+        operstate = data_source.read_file_if_exists(sys_prefix + "/operstate").rstrip()
         if operstate == "up":
             # Implemented via shell cmd to avoid using non default libraries
             interface_data = data_source.exec_shell_cmd(" ip address show dev %s" % self.net)
@@ -1230,6 +1234,17 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
             self.ip_state = self.ip_state + self.config.error_sign
         if self.ip_state == "up_noip" and self.config.show_warnings_and_errors is True:
             self.ip_state = self.ip_state + self.config.warning_sign
+
+        mode = data_source.read_file_if_exists(sys_prefix + "/bonding/mode").rstrip()
+        mode = mode.split(" ")[0]
+        xmit_hash_policy = data_source.read_file_if_exists(sys_prefix + "/bonding/xmit_hash_policy").rstrip()
+        xmit_hash_policy = xmit_hash_policy.split(" ")[0]
+        xmit_hash_policy = xmit_hash_policy.replace("layer","l")
+        xmit_hash_policy = xmit_hash_policy.replace("encap","e")
+
+        self.bond_state = mode
+        if xmit_hash_policy != "" :
+            self.bond_state = self.bond_state + "/" + xmit_hash_policy
 
 
 class DataSource(object):
