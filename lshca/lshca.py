@@ -486,7 +486,8 @@ class Output(object):
 
                 # ---- Remove LnkStat if all are actv
                 if "LnkStat" in bdf_device:
-                    if bdf_device["LnkStat"].strip() != "actv":
+                    if ( bdf_device["LnkStat"].strip() != "actv" and bdf_device["Bond"] == "" ) or \
+                       ( bdf_device["LnkStat"].strip() != "" and bdf_device["Bond"] != "" ):
                         remove_lnk_stat = False
 
                 # ---- Remove bond related fields if no bond configured
