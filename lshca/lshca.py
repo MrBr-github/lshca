@@ -369,6 +369,10 @@ class HCAManager(object):
                     if parent_found:
                         break
 
+        if self.config.show_warnings_and_errors:
+            for hca in self.mlnxHCAs:
+                hca.check_for_issues()
+
     def display_hcas_info(self):
         out = Output(self.config)
         for hca in self.mlnxHCAs:
@@ -1194,6 +1198,22 @@ class MlnxHCA(object):
         for bdf_dev in self.bdf_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
         return output
+
+    def check_for_issues(self):
+        # this function comes to check for issues on HCA level cross all BDFs
+        inactive_bond_slaves = []
+        bond_type = ""
+
+        for bdf in self.bdf_devices:
+            if "802.3ad" in bdf.bond_state:
+                bond_type = "802.3ad"
+            elif bdf.bond_state != "active":
+                inactive_bond_slaves.append(bdf)
+
+        if bond_type == "802.3ad" and len(inactive_bond_slaves) > 0:
+            for bdf in inactive_bond_slaves:
+                bdf.bond_state = bdf.bond_state + self.config.error_sign
+
 
 
 class MlnxRdmaBondDevice(MlnxBDFDevice):
