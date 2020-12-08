@@ -249,6 +249,7 @@ class Config(object):
           LnkStaWidth   - PCI width status. Number of PCI lanes avaliable for HCA in current slot. PF only.
           Parent_addr   - BDF address of SRIOV parent Physical Function for this Virtual Function
           Rate          - Link rate in Gbit/s
+                          On bond master, will show all slave speeds delimited by /
           SRIOV         - SRIOV function type. Possible values:
                             PF - Physical Function
                             VF - Virtual Function
@@ -1204,11 +1205,7 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.bond_mii_status = ""
         self.ip_state = None
 
-
         sys_prefix = "/sys/devices/virtual/net/" + self.net
-
-        # TBD
-        # /sys/class/net/vava0/bonding/miimon
 
         operstate = data_source.read_file_if_exists(sys_prefix + "/operstate").rstrip()
         if operstate == "up":
@@ -1245,6 +1242,27 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.bond_state = mode
         if xmit_hash_policy != "" :
             self.bond_state = self.bond_state + "/" + xmit_hash_policy
+
+        # Slaves speed check
+        slaves = data_source.read_file_if_exists(sys_prefix + "/bonding/slaves").rstrip().split(" ")
+        bond_speed = ""
+        bond_speed_missmatch = False
+        for slave in slaves:
+            slave_speed = data_source.read_file_if_exists(sys_prefix + "/slave_" + slave + "/speed").rstrip()
+            slave_speed = str(int(slave_speed)/1000)
+            if self.port_rate != slave_speed:
+                bond_speed_missmatch = True
+
+            if bond_speed == "":
+                bond_speed = slave_speed
+            else:
+                bond_speed = bond_speed + "/" + slave_speed
+
+        self.port_rate = bond_speed
+
+        if bond_speed_missmatch:
+            if self.config.show_warnings_and_errors is True:
+                self.port_rate  = self.port_rate + self.config.error_sign
 
 
 class DataSource(object):
