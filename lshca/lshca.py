@@ -564,12 +564,11 @@ class Output(object):
     def print_output(self):
         self.filter_out_data()
 
-        self.update_separator_and_column_width()
-
-        if self.separator_len == 0:
-            sys.exit(1)
-
         if self.config.output_format == "human_readable":
+            self.update_separator_and_column_width()
+            if self.separator_len == 0:
+                print("No HCAs to display")
+                sys.exit(0)
             self.print_output_human_readable()
         elif self.config.output_format == "json":
             self.print_output_json()
