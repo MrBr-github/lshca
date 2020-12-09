@@ -1,3 +1,10 @@
+Ver. 3.4
+    - Feature: Added multiple improvements in bonding display and errors
+        - shows bond type
+        - master bond speed based speeds of slaves
+        - shows issues with slaves if bond type is 802.3ad
+    - Feature: if no HCAs exists, shows user friendly message or empty json
+    - Change: if no HCAs exists, exits without error
 Ver. 3.3
     - Feature: Adjusted project for PyPI publishing
 Ver. 3.2

@@ -45,7 +45,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "3.3"
+        self.ver = "3.4"
 
         self.mst_device_enabled = False
         self.sa_smp_query_device_enabled = False
@@ -249,11 +249,14 @@ class Config(object):
           LnkStaWidth   - PCI width status. Number of PCI lanes avaliable for HCA in current slot. PF only.
           Parent_addr   - BDF address of SRIOV parent Physical Function for this Virtual Function
           Rate          - Link rate in Gbit/s
+                          On bond master, will show all slave speeds delimited by /
           SRIOV         - SRIOV function type. Possible values:
                             PF - Physical Function
                             VF - Virtual Function
           Bond          - Name of Bond parent
-          BondState     - Interface status in a bond. Search for bonding.txt in kernel.org for detailed information
+          BondState     - On slave interface - status in a bond
+                          On master interface - bonding policy appended by xmit hash policy if relevant
+                          Search for bonding.txt in kernel.org for detailed information
           BondMiiStat   - Interface mii status in a bond. Search for bonding.txt in kernel.org for detailed information
 
          IB view
@@ -319,7 +322,8 @@ class HCAManager(object):
         for bdf_dev in mlnx_bdf_devices:
             rdma_bond_bdf = None
 
-            if extract_string_by_regex(bdf_dev.rdma, ".*(bond)_.*", ""):
+            # Only first slave interface in a bond has infiniband information on his sysfs
+            if bdf_dev.bond_master != "=N/A=" and bdf_dev.rdma != "" :
                 rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, data_source, self.config)
                 rdma_bond_bdf.fix_rdma_bond(data_source)
 
@@ -364,6 +368,10 @@ class HCAManager(object):
 
                     if parent_found:
                         break
+
+        if self.config.show_warnings_and_errors:
+            for hca in self.mlnxHCAs:
+                hca.check_for_issues()
 
     def display_hcas_info(self):
         out = Output(self.config)
@@ -486,7 +494,8 @@ class Output(object):
 
                 # ---- Remove LnkStat if all are actv
                 if "LnkStat" in bdf_device:
-                    if bdf_device["LnkStat"].strip() != "actv":
+                    if ( bdf_device["LnkStat"].strip() != "actv" and bdf_device["Bond"] == "" ) or \
+                       ( bdf_device["LnkStat"].strip() != "" and bdf_device["Bond"] != "" ):
                         remove_lnk_stat = False
 
                 # ---- Remove bond related fields if no bond configured
@@ -555,12 +564,11 @@ class Output(object):
     def print_output(self):
         self.filter_out_data()
 
-        self.update_separator_and_column_width()
-
-        if self.separator_len == 0:
-            sys.exit(1)
-
         if self.config.output_format == "human_readable":
+            self.update_separator_and_column_width()
+            if self.separator_len == 0:
+                print("No HCAs to display")
+                sys.exit(0)
             self.print_output_human_readable()
         elif self.config.output_format == "json":
             self.print_output_json()
@@ -1190,6 +1198,22 @@ class MlnxHCA(object):
             output["bdf_devices"].append(bdf_dev.output_info())
         return output
 
+    def check_for_issues(self):
+        # this function comes to check for issues on HCA level cross all BDFs
+        inactive_bond_slaves = []
+        bond_type = ""
+
+        for bdf in self.bdf_devices:
+            if "802.3ad" in bdf.bond_state:
+                bond_type = "802.3ad"
+            elif bdf.bond_state != "active":
+                inactive_bond_slaves.append(bdf)
+
+        if bond_type == "802.3ad" and len(inactive_bond_slaves) > 0:
+            for bdf in inactive_bond_slaves:
+                bdf.bond_state = bdf.bond_state + self.config.error_sign
+
+
 
 class MlnxRdmaBondDevice(MlnxBDFDevice):
     def fix_rdma_bond(self, data_source):
@@ -1198,13 +1222,11 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.net = self.bond_master
         self.bond_master = ""
         self.bond_mii_status = ""
-        self.bond_state = ""
-
-        # TBD
-        # /sys/class/net/vava0/bonding/miimon
-
-        operstate = data_source.read_file_if_exists("/sys/class/net/" + self.net + "/operstate").rstrip()
         self.ip_state = None
+
+        sys_prefix = "/sys/devices/virtual/net/" + self.net
+
+        operstate = data_source.read_file_if_exists(sys_prefix + "/operstate").rstrip()
         if operstate == "up":
             # Implemented via shell cmd to avoid using non default libraries
             interface_data = data_source.exec_shell_cmd(" ip address show dev %s" % self.net)
@@ -1228,6 +1250,39 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
             self.ip_state = self.ip_state + self.config.error_sign
         if self.ip_state == "up_noip" and self.config.show_warnings_and_errors is True:
             self.ip_state = self.ip_state + self.config.warning_sign
+
+        mode = data_source.read_file_if_exists(sys_prefix + "/bonding/mode").rstrip()
+        mode = mode.split(" ")[0]
+        xmit_hash_policy = data_source.read_file_if_exists(sys_prefix + "/bonding/xmit_hash_policy").rstrip()
+        xmit_hash_policy = xmit_hash_policy.split(" ")[0]
+        xmit_hash_policy = xmit_hash_policy.replace("layer","l")
+        xmit_hash_policy = xmit_hash_policy.replace("encap","e")
+
+        self.bond_state = mode
+        if xmit_hash_policy != "" :
+            self.bond_state = self.bond_state + "/" + xmit_hash_policy
+
+        # Slaves speed check
+        slaves = data_source.read_file_if_exists(sys_prefix + "/bonding/slaves").rstrip().split(" ")
+        bond_speed = ""
+        bond_speed_missmatch = False
+        for slave in slaves:
+            slave_speed = data_source.read_file_if_exists(sys_prefix + "/slave_" + slave + "/speed").rstrip()
+            if slave_speed:
+                slave_speed = str(int(slave_speed)/1000)
+            if self.port_rate != slave_speed:
+                bond_speed_missmatch = True
+
+            if bond_speed == "":
+                bond_speed = slave_speed
+            else:
+                bond_speed = bond_speed + "/" + slave_speed
+
+        self.port_rate = bond_speed
+
+        if bond_speed_missmatch:
+            if self.config.show_warnings_and_errors is True:
+                self.port_rate  = self.port_rate + self.config.error_sign
 
 
 class DataSource(object):
