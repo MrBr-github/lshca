@@ -2,7 +2,7 @@ from setuptools import setup
 setup(
   name = 'lshca',
   packages = ['lshca'],
-  version = '3.4',
+  version = '3.4.1',
   license='GNU GPLv3',
   description = 'This utility comes to provide bird\'s-eye view of HCAs installed',
   author = 'Michael Braverman',

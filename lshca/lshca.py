@@ -323,7 +323,7 @@ class HCAManager(object):
             rdma_bond_bdf = None
 
             # Only first slave interface in a bond has infiniband information on his sysfs
-            if bdf_dev.bond_master != "" and bdf_dev.rdma != "" :
+            if bdf_dev.bond_master != "=N/A=" and bdf_dev.rdma != "" :
                 rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, data_source, self.config)
                 rdma_bond_bdf.fix_rdma_bond(data_source)
 
@@ -1268,7 +1268,8 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         bond_speed_missmatch = False
         for slave in slaves:
             slave_speed = data_source.read_file_if_exists(sys_prefix + "/slave_" + slave + "/speed").rstrip()
-            slave_speed = str(int(slave_speed)/1000)
+            if slave_speed:
+                slave_speed = str(int(slave_speed)/1000)
             if self.port_rate != slave_speed:
                 bond_speed_missmatch = True
 
