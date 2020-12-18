@@ -60,6 +60,7 @@ class Config(object):
         self.output_fields_filter_negative = ""
         self.where_output_filter = ""
 
+        # based on https://community.mellanox.com/s/article/lossless-roce-configuration-for-linux-drivers-in-dscp-based-qos-mode
         self.lossless_roce_expected_trust = "dscp"
         self.lossless_roce_expected_pfc = "00010000"
         self.lossless_roce_expected_gtclass = "Global tclass=106"
