@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 
 # Description: This utility comes to provide bird's-eye view of HCAs installed.
 #              It's mainly intended for system administrators, thus defaults configured accordingly.
@@ -204,8 +205,7 @@ class Config(object):
 
         self.colour_warnings_and_errors = args.colour
 
-    @staticmethod
-    def extended_help():
+    def extended_help(self):
         print textwrap.dedent("""
         --== Detailed fields description ==--
         Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
@@ -272,9 +272,14 @@ class Config(object):
                             NA   - IB link - not supported with mlx4 driver OR non IB link
          RoCE view
           RoCEstat      - RoCE status. Possible values:
-                            Lossless - Port configured with Lossless port configurations.
-                            Lossy    - Port configured with Lossy port configurations
-
+                            Lossless       - Port configured with Lossless port configurations.
+                            Lossy[:bitmap] - Port configured with Lossy port configurations
+                                   XXXXX     Bitmap will appear if lossless configuration is partial
+                                   ││││└─ rdma_cm_tos - expected \"""" + self.lossless_roce_expected_rdma_cm_tos + """\"
+                                   │││└── tcp_ecn  - expected \"""" + self.lossless_roce_expected_tcp_ecn + """\"
+                                   ││└─── gtclass - expected \"""" + self.lossless_roce_expected_gtclass + """\"
+                                   │└──── pfc - expected \"""" + self.lossless_roce_expected_pfc + """\"
+                                   └───── trust - expected \"""" + self.lossless_roce_expected_trust + """\"
 
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
@@ -1101,14 +1106,45 @@ class MlnxBDFDevice(object):
         if self.link_layer != "Eth":
             return "N/A"
 
-        if self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass and \
-           self.sysFSDevice.tcp_ecn == self.config.lossless_roce_expected_tcp_ecn and \
-           self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos and \
-           self.miscDevice.get_mlnx_qos_trust() == self.config.lossless_roce_expected_trust and \
-           self.miscDevice.get_mlnx_qos_pfc() == self.config.lossless_roce_expected_pfc:
-            return "Lossless"
+        lossy_status_bitmap_str = ""
+
+        if self.miscDevice.get_mlnx_qos_trust() == self.config.lossless_roce_expected_trust:
+            lossy_status_bitmap_str += "1"
         else:
-            return "Lossy"
+            lossy_status_bitmap_str += "0"
+
+        if self.miscDevice.get_mlnx_qos_pfc() == self.config.lossless_roce_expected_pfc:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if self.sysFSDevice.tcp_ecn == self.config.lossless_roce_expected_tcp_ecn:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+
+
+        if "1" in lossy_status_bitmap_str and "0" not in lossy_status_bitmap_str:
+            retval = "Lossless"
+        elif "0" in lossy_status_bitmap_str and "1" not in lossy_status_bitmap_str:
+            retval = "Lossy"
+        else:
+            retval = "Lossy:" + lossy_status_bitmap_str
+            if self.config.show_warnings_and_errors is True:
+                return retval + self.config.warning_sign
+
+        return retval
 
     def output_info(self):
         if self.sriov in ("PF", "PF" + self.config.warning_sign):
