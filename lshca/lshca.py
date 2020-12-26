@@ -1004,6 +1004,39 @@ class MlxCable(object):
         self.cable_pn = search_in_list_and_extract_by_regex(data, r'Part number +:.*', r'Part number +:(.*)').replace(" ", "")
 
 
+class MlxLink(object):
+    def __init__(self, data_source):
+        self._data_source = data_source
+
+        self.phisical_link_recommendation = ""
+        self.phisical_link_speed = ""
+        self.phisical_link_status = ""
+
+    def get_data(self, mst_device, port):
+        if mst_device == "":
+            return
+        data = self._data_source.exec_shell_cmd("mlxlink -d {} -p {} --json".format(mst_device, port), use_cache=True)
+        try:
+            json_data = json.loads("".join(data))
+        except (TypeError, ValueError):
+            return
+
+        if "result" in json_data and \
+           "output" in json_data["result"]:
+            if "Operational Info" in json_data["result"]["output"]:
+                if "Physical state" in  json_data["result"]["output"]["Operational Info"]:
+                   self.phisical_link_status = json_data["result"]["output"]["Operational Info"]["Physical state"]
+                if "Speed" in  json_data["result"]["output"]["Operational Info"]:
+                    self.phisical_link_speed = json_data["result"]["output"]["Operational Info"]["Speed"]
+            if "Troubleshooting Info" in json_data["result"]["output"]:
+                if "Recommendation" in json_data["result"]["output"]["Troubleshooting Info"]:
+                    self.phisical_link_recommendation = json_data["result"]["output"]["Troubleshooting Info"]["Recommendation"]
+                    self.phisical_link_recommendation = self.phisical_link_recommendation.replace(" ", "_")
+
+                    if self.phisical_link_recommendation == "No_issue_was_observed.":
+                        self.phisical_link_recommendation = "No_issue"
+
+
 class MiscCMDs(object):
     def __init__(self, net, rdma, data_source, config):
         self.data_source = data_source
@@ -1089,6 +1122,13 @@ class MlnxBDFDevice(object):
                 self.config.output_order.append("MST_device")
         self.mst_device = self.mstDevice.mst_device
         self.mst_cable = self.mstDevice.mst_cable
+
+        self.mlxLink = MlxLink(data_source)
+        if self.config.output_view == "cable":
+            self.mlxLink.get_data(self.mst_device, self.port)
+        self.phisical_link_speed = self.mlxLink.phisical_link_speed
+        self.phisical_link_status = self.mlxLink.phisical_link_status
+        self.phisical_link_recommendation = self.mlxLink.phisical_link_recommendation
 
         self.mlxCable = MlxCable(data_source)
         if self.config.output_view == "cable":
