@@ -653,61 +653,63 @@ class Output(object):
 
 
 class MSTDevice(object):
-    def __init__(self, bdf, data_source, config):
-        self.bdf = bdf
-        self.config = config
+    mst_service_initialized = False
+    mst_service_should_be_stopped = False
+
+    def __init__(self, data_source, config):
+        self._config = config
+        self._data_source = data_source
+        self._mst_raw_data = None
+
         self.mst_device = ""
-        self.mst_raw_data = "No MST data"
-        self.bdf_short_format = True
-        mst_init_running = False
+        self.mst_cable = ""
 
-        if self.config.mst_device_enabled:
-            if "MST_device" not in self.config.output_order:
-                self.config.output_order.append("MST_device")
-
-            result = data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
-            if result == ["0"]:
-                mst_installed = True
-            else:
-                mst_installed = False
-
-            if mst_installed:
-                result = data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'",
-                                                    use_cache=True)
-                if result != ["0"]:
-                    mst_init_running = True
-
-                if not mst_init_running:
-                    data_source.exec_shell_cmd("mst start", use_cache=True)
-
-                self.mst_raw_data = data_source.exec_shell_cmd("mst status -v", use_cache=True)
-                self.got_raw_data = True
-
-                if not mst_init_running:
-                    data_source.exec_shell_cmd("mst stop", use_cache=True)
-
-                # Same lspci cmd used in HCAManager in order to benefit from cache
-                lspci_raw_data = data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
-                for line in lspci_raw_data:
-                    pci_domain = extract_string_by_regex(line, "([0-9]{4}):.*")
-                    if pci_domain != "0000":
-                        self.bdf_short_format = False
-
-                if self.bdf_short_format:
-                    self.bdf = extract_string_by_regex(self.bdf, "[0-9]{4}:(.*)")
-
-                for line in self.mst_raw_data:
-                    data_line = extract_string_by_regex(line, "(.*" + self.bdf + ".*)")
-                    if data_line != "=N/A=":
-                        mst_device = extract_string_by_regex(data_line, ".* (/dev/mst/[^\s]+) .*")
-                        self.mst_device = mst_device
-            else:
-                print >> sys.stderr, "\n\nError: MST tool is missing\n\n"
-                # Disable further use.access to mst device
-                self.config.mst_device_enabled = False
+    def __del__(self):
+        if MSTDevice.mst_service_should_be_stopped:
+            self._data_source.exec_shell_cmd("mst stop", use_cache=True)
+            MSTDevice.mst_service_should_be_stopped = False
 
     def __repr__(self):
-        return self.mst_raw_data
+        return self._mst_raw_data
+
+    def init_mst_service(self):
+        if MSTDevice.mst_service_initialized:
+            return
+        
+        result = self._data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
+        if result == ["0"]:
+            mst_installed = True
+        else:
+            mst_installed = False
+
+        if mst_installed:
+            result = self._data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'", use_cache=True)
+            if result >= 0:
+                self._data_source.exec_shell_cmd("mst start", use_cache=True)
+                MSTDevice.mst_service_should_be_stopped = True
+            self._data_source.exec_shell_cmd("mst cable add", use_cache=True)
+        else:
+            print >> sys.stderr, "\n\nError: MST tool is missing\n\n"
+            # Disable further use.access to mst device
+            self._config.mst_device_enabled = False
+
+        MSTDevice.mst_service_initialized = True
+
+    def get_data(self, bdf):
+        mst_device_suffix = "None"
+        self._mst_raw_data = self._data_source.exec_shell_cmd("mst status -v", use_cache=True)
+        bdf_short = extract_string_by_regex(bdf, "0000:(.+)")
+        if bdf_short == "=N/A=":
+            bdf_short = bdf
+
+        for line in self._mst_raw_data:
+            data_line = extract_string_by_regex(line, "(.*" + bdf_short + ".*)")
+
+            if data_line != "=N/A=":
+                self.mst_device = extract_string_by_regex(data_line, r".* (/dev/mst/[^\s]+) .*")
+                mst_device_suffix = extract_string_by_regex(data_line, r"/dev/mst/([^\s]+)")
+
+        self.mst_cable = find_in_list(self._mst_raw_data, r"({}_cable_[^\s]+)".format(mst_device_suffix)).strip()
 
 
 class PCIDevice(object):
@@ -1064,8 +1066,14 @@ class MlnxBDFDevice(object):
         self.pn = self.pciDevice.pn
         self.sn = self.pciDevice.sn
 
-        self.mstDevice = MSTDevice(self.bdf, data_source, self.config)
+        self.mstDevice = MSTDevice(data_source, self.config)
+        if self.config.output_view == "cable" or self.config.mst_device_enabled:
+            self.mstDevice.init_mst_service()
+            self.mstDevice.get_data(bdf)
+            if "MST_device" not in self.config.output_order:
+                self.config.output_order.append("MST_device")
         self.mst_device = self.mstDevice.mst_device
+        self.mst_cable = self.mstDevice.mst_cable
 
         self.miscDevice = MiscCMDs(self.net, self.rdma, data_source, self.config)
         self.tempr = self.miscDevice.get_tempr()
@@ -1212,7 +1220,6 @@ class MlnxHCA(object):
         if bond_type == "802.3ad" and len(inactive_bond_slaves) > 0:
             for bdf in inactive_bond_slaves:
                 bdf.bond_state = bdf.bond_state + self.config.error_sign
-
 
 
 class MlnxRdmaBondDevice(MlnxBDFDevice):
