@@ -472,6 +472,7 @@ class Output(object):
             remove_lnk_stat = True
             remove_ip_stat = True
             remove_bond = True
+            remove_phy_analisys = True
 
             for bdf_device in hca["bdf_devices"]:
                 # ---- Removing SRIOV and Parent_addr if no VFs present
@@ -507,6 +508,11 @@ class Output(object):
                     if bdf_device["Bond"].strip() and bdf_device["Bond"].strip() != "=N/A=":
                         remove_bond = False
 
+                # ---- Remove PhyAnalisys if there are no issues
+                if "PhyAnalisys" in bdf_device:
+                    if bdf_device["PhyAnalisys"] != "No_issue":
+                        remove_phy_analisys = False
+
             if remove_sriov_and_parent:
                 hca_fields_for_removal.append("SRIOV")
                 hca_fields_for_removal.append("Parent_addr")
@@ -522,6 +528,8 @@ class Output(object):
                 hca_fields_for_removal.append("Bond")
                 hca_fields_for_removal.append("BondState")
                 hca_fields_for_removal.append("BondMiiStat")
+            if remove_phy_analisys:
+                hca_fields_for_removal.append("PhyAnalisys")
 
             for field in hca_fields_for_removal:
                 if field in hca:
