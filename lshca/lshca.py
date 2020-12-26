@@ -675,7 +675,7 @@ class MSTDevice(object):
     def init_mst_service(self):
         if MSTDevice.mst_service_initialized:
             return
-        
+
         result = self._data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
         if result == ["0"]:
             mst_installed = True
@@ -989,6 +989,21 @@ class SaSmpQueryDevice(object):
         return str(search_result).strip()
 
 
+class MlxCable(object):
+    def __init__(self, data_source):
+        self._data_source = data_source
+
+        self.cable_length = ""
+        self.cable_pn = ""
+
+    def get_data(self, mst_cable):
+        if mst_cable == "":
+            return
+        data = self._data_source.exec_shell_cmd("mlxcables -d " + mst_cable, use_cache=True)
+        self.cable_length = search_in_list_and_extract_by_regex(data, r'Length +:.*', r'Length +:(.*)').replace(" ", "")
+        self.cable_pn = search_in_list_and_extract_by_regex(data, r'Part number +:.*', r'Part number +:(.*)').replace(" ", "")
+
+
 class MiscCMDs(object):
     def __init__(self, net, rdma, data_source, config):
         self.data_source = data_source
@@ -1074,6 +1089,12 @@ class MlnxBDFDevice(object):
                 self.config.output_order.append("MST_device")
         self.mst_device = self.mstDevice.mst_device
         self.mst_cable = self.mstDevice.mst_cable
+
+        self.mlxCable = MlxCable(data_source)
+        if self.config.output_view == "cable":
+            self.mlxCable.get_data(self.mst_cable)
+        self.cable_length = self.mlxCable.cable_length
+        self.cable_pn = self.mlxCable.cable_pn
 
         self.miscDevice = MiscCMDs(self.net, self.rdma, data_source, self.config)
         self.tempr = self.miscDevice.get_tempr()
@@ -1441,6 +1462,10 @@ def find_in_list(list_to_search_in, regex_pattern):
     else:
         return ""
 
+def search_in_list_and_extract_by_regex(data_list, search_regex, output_regex):
+    list_search_result = find_in_list(data_list, search_regex)
+    regex_search_result = extract_string_by_regex(list_search_result, output_regex)
+    return str(regex_search_result).strip()
 
 def main():
     if os.geteuid() != 0:
