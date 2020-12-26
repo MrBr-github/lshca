@@ -1127,7 +1127,7 @@ class MlnxBDFDevice(object):
         self.sn = self.pciDevice.sn
 
         self.mstDevice = MSTDevice(data_source, self.config)
-        if self.config.output_view == "cable" or self.config.mst_device_enabled:
+        if self.config.output_view == "cable" or self.config.mst_device_enabled or self.config.output_view == "all":
             self.mstDevice.init_mst_service()
             self.mstDevice.get_data(bdf)
             if "MST_device" not in self.config.output_order:
@@ -1136,14 +1136,14 @@ class MlnxBDFDevice(object):
         self.mst_cable = self.mstDevice.mst_cable
 
         self.mlxLink = MlxLink(data_source)
-        if self.config.output_view == "cable":
+        if self.config.output_view == "cable" or self.config.output_view == "all":
             self.mlxLink.get_data(self.mst_device, self.port)
         self.phisical_link_speed = self.mlxLink.phisical_link_speed
         self.phisical_link_status = self.mlxLink.phisical_link_status
         self.phisical_link_recommendation = self.mlxLink.phisical_link_recommendation
 
         self.mlxCable = MlxCable(data_source)
-        if self.config.output_view == "cable":
+        if self.config.output_view == "cable" or self.config.output_view == "all":
             self.mlxCable.get_data(self.mst_cable)
         self.cable_length = self.mlxCable.cable_length
         self.cable_pn = self.mlxCable.cable_pn
