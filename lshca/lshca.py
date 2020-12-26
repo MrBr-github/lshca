@@ -33,7 +33,9 @@ class Config(object):
                     "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
                            "VrtHCA", "PLid", "PGuid", "IbNetPref"],
                     "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
-                             "IpStat", "RoCEstat"]
+                             "IpStat", "RoCEstat"],
+                    "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "MST_device",  "CblPN", "CblLng",
+                              "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -92,7 +94,7 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'all'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'all'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
@@ -155,6 +157,8 @@ class Config(object):
             self.output_view = "roce"
         elif args.view == "system":
             self.output_view = "system"
+        elif args.view == "cable":
+            self.output_view = "cable"
         elif args.view == "all":
             self.mst_device_enabled = True
             self.sa_smp_query_device_enabled = True
@@ -1209,7 +1213,12 @@ class MlnxBDFDevice(object):
                   "RoCEstat": self.roce_status,
                   "Bond": self.bond_master,
                   "BondState": self.bond_state,
-                  "BondMiiStat": self.bond_mii_status}
+                  "BondMiiStat": self.bond_mii_status,
+                  "PhyLinkStat": self.phisical_link_status ,
+                  "PhyLnkSpd": self.phisical_link_speed,
+                  "CblPN": self.cable_pn,
+                  "CblLng": self.cable_length,
+                  "PhyAnalisys": self.phisical_link_recommendation}
         return output
 
 
