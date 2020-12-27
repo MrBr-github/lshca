@@ -100,6 +100,8 @@ class Config(object):
                               system - (default). Show system oriented HCA info
                               ib     - Show IB oriented HCA info. Implies "sasmpquery" data source
                               roce   - Show RoCE oriented HCA info"
+                              cable  - Show cable and phisical link HCA info. Based on mlxcable and mlxlink utils.
+                                       Note: It takes time to display this view due to underling utils execution time.
                               all    - Show all available HCA info. Aggregates all above views + MST data source.
                               Note: all human readable output views are elastic. See extended help for more info.
                             ''')
@@ -274,6 +276,15 @@ class Config(object):
                             Phys - Physical HCA port. For example, you could run openSM this ports
                             Virt - Virtual HCA port.
                             NA   - IB link - not supported with mlx4 driver OR non IB link
+
+         Cable view   (use source utils for more info)
+          MST_device    - MST device name. Source mst
+          CblPN         - Part number of the connected cable. Source mlxcable
+          CblLng        - Length of the connected cable. Source mlxcable
+          PhyAnalisys   - If something goes wrong, some analisys will be shown to assist in issue resolution. Source mlxlink
+          PhyLinkStat   - Status of the phisical link. May differ from its logical state. Source mlxlink
+          PhyLnkSpd     - Speed of the phisical link. I.e protocol used for communication. Source mlxlink
+
          RoCE view
           RoCEstat      - RoCE status. Possible values:
                             Lossless - Port configured with Lossless port configurations.
@@ -291,6 +302,7 @@ class Config(object):
         IpStat       - if all LnkStat valuse are "down"
         Bond, BondState, BondMiiStat
                      - if no bond device configured
+        PhyAnalisys  - if no issue detected
 
         """)
         sys.exit(0)
