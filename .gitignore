@@ -3,3 +3,4 @@ recorded_data
 dist
 MANIFEST
 lshca.egg-info
+.vscode
