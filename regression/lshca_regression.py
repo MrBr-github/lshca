@@ -94,6 +94,7 @@ def regression():
                                 '''))
     parser.add_argument('--remove-separators', action='store_true', help="Don't show and compare separators")
     parser.add_argument('--display-recorded-fields', action='store_true', help="Display ONLY originaly recorded fields. Overwrites -p")
+    parser.add_argument('--data-source', nargs="+", help="Select single data souce from recorded_data directory")
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
                         help=textwrap.dedent('''\
                                 override saved parameters and pass new ones
@@ -108,7 +109,14 @@ def regression():
             cust_user_args.append(member)
     args = parser.parse_args(cust_user_args)
 
-    recorded_data_files_list = os.listdir("recorded_data")
+    if args.data_source:
+        if os.path.isfile("recorded_data/" + str(args.data_source[0])):
+            recorded_data_files_list = [str(args.data_source[0])]
+        else:
+            print("No such data source \"" + str(args.data_source[0]) + "\"")
+            sys.exit(1)
+    else:
+        recorded_data_files_list = os.listdir("recorded_data")
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
 
