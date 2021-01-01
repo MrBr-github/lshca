@@ -98,7 +98,14 @@ def regression():
                                 override saved parameters and pass new ones
                                 this parameter HAS to be the LAST one
                                 '''))
-    args = parser.parse_args(sys.argv[1:])
+
+    # comes to handle comma separated list of choices
+    cust_user_args = []
+    for arg in sys.argv[1:]:
+        result = arg.split(",")
+        for member in result:
+            cust_user_args.append(member)
+    args = parser.parse_args(cust_user_args)
 
     recorded_data_files_list = os.listdir("recorded_data")
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
