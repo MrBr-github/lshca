@@ -683,6 +683,7 @@ class Output(object):
 
 
 class MSTDevice(object):
+    mst_device_enabled = False
     mst_service_initialized = False
     mst_service_should_be_stopped = False
 
@@ -718,6 +719,7 @@ class MSTDevice(object):
                 self._data_source.exec_shell_cmd("mst start", use_cache=True)
                 MSTDevice.mst_service_should_be_stopped = True
             self._data_source.exec_shell_cmd("mst cable add", use_cache=True)
+            MSTDevice.mst_device_enabled = True
         else:
             print >> sys.stderr, "\n\nError: MST tool is missing\n\n"
             # Disable further use.access to mst device
@@ -726,6 +728,9 @@ class MSTDevice(object):
         MSTDevice.mst_service_initialized = True
 
     def get_data(self, bdf):
+        if not MSTDevice.mst_device_enabled:
+            return
+
         mst_device_suffix = "None"
         self._mst_raw_data = self._data_source.exec_shell_cmd("mst status -v", use_cache=True)
         bdf_short = extract_string_by_regex(bdf, "0000:(.+)")
