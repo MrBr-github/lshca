@@ -102,7 +102,7 @@ class Config(object):
                               system - (default). Show system oriented HCA info
                               ib     - Show IB oriented HCA info. Implies "sasmpquery" data source
                               roce   - Show RoCE oriented HCA info"
-                              cable  - Show cable and phisical link HCA info. Based on mlxcable and mlxlink utils.
+                              cable  - Show cable and physical link HCA info. Based on mlxcable and mlxlink utils.
                                        Note: It takes time to display this view due to underling utils execution time.
                               all    - Show all available HCA info. Aggregates all above views + MST data source.
                               Note: all human readable output views are elastic. See extended help for more info.
@@ -283,8 +283,8 @@ class Config(object):
           CblPN         - Part number of the connected cable. Source mlxcable
           CblLng        - Length of the connected cable. Source mlxcable
           PhyAnalisys   - If something goes wrong, some analisys will be shown to assist in issue resolution. Source mlxlink
-          PhyLinkStat   - Status of the phisical link. May differ from its logical state. Source mlxlink
-          PhyLnkSpd     - Speed of the phisical link. I.e protocol used for communication. Source mlxlink
+          PhyLinkStat   - Status of the physical link. May differ from its logical state. Source mlxlink
+          PhyLnkSpd     - Speed of the physical link. I.e protocol used for communication. Source mlxlink
 
          RoCE view
           RoCEstat      - RoCE status. Possible values:
@@ -1038,9 +1038,9 @@ class MlxLink(object):
     def __init__(self, data_source):
         self._data_source = data_source
 
-        self.phisical_link_recommendation = ""
-        self.phisical_link_speed = ""
-        self.phisical_link_status = ""
+        self.physical_link_recommendation = ""
+        self.physical_link_speed = ""
+        self.physical_link_status = ""
 
     def get_data(self, mst_device, port):
         if mst_device == "":
@@ -1055,16 +1055,16 @@ class MlxLink(object):
            "output" in json_data["result"]:
             if "Operational Info" in json_data["result"]["output"]:
                 if "Physical state" in  json_data["result"]["output"]["Operational Info"]:
-                   self.phisical_link_status = json_data["result"]["output"]["Operational Info"]["Physical state"]
+                   self.physical_link_status = json_data["result"]["output"]["Operational Info"]["Physical state"]
                 if "Speed" in  json_data["result"]["output"]["Operational Info"]:
-                    self.phisical_link_speed = json_data["result"]["output"]["Operational Info"]["Speed"]
+                    self.physical_link_speed = json_data["result"]["output"]["Operational Info"]["Speed"]
             if "Troubleshooting Info" in json_data["result"]["output"]:
                 if "Recommendation" in json_data["result"]["output"]["Troubleshooting Info"]:
-                    self.phisical_link_recommendation = json_data["result"]["output"]["Troubleshooting Info"]["Recommendation"]
-                    self.phisical_link_recommendation = self.phisical_link_recommendation.replace(" ", "_")
+                    self.physical_link_recommendation = json_data["result"]["output"]["Troubleshooting Info"]["Recommendation"]
+                    self.physical_link_recommendation = self.physical_link_recommendation.replace(" ", "_")
 
-                    if self.phisical_link_recommendation == "No_issue_was_observed.":
-                        self.phisical_link_recommendation = "No_issue"
+                    if self.physical_link_recommendation == "No_issue_was_observed.":
+                        self.physical_link_recommendation = "No_issue"
 
 
 class MiscCMDs(object):
@@ -1156,9 +1156,9 @@ class MlnxBDFDevice(object):
         self.mlxLink = MlxLink(data_source)
         if self.config.output_view == "cable" or self.config.output_view == "all":
             self.mlxLink.get_data(self.mst_device, self.port)
-        self.phisical_link_speed = self.mlxLink.phisical_link_speed
-        self.phisical_link_status = self.mlxLink.phisical_link_status
-        self.phisical_link_recommendation = self.mlxLink.phisical_link_recommendation
+        self.physical_link_speed = self.mlxLink.physical_link_speed
+        self.physical_link_status = self.mlxLink.physical_link_status
+        self.physical_link_recommendation = self.mlxLink.physical_link_recommendation
 
         self.mlxCable = MlxCable(data_source)
         if self.config.output_view == "cable" or self.config.output_view == "all":
@@ -1277,11 +1277,11 @@ class MlnxBDFDevice(object):
                   "Bond": self.bond_master,
                   "BondState": self.bond_state,
                   "BondMiiStat": self.bond_mii_status,
-                  "PhyLinkStat": self.phisical_link_status ,
-                  "PhyLnkSpd": self.phisical_link_speed,
+                  "PhyLinkStat": self.physical_link_status ,
+                  "PhyLnkSpd": self.physical_link_speed,
                   "CblPN": self.cable_pn,
                   "CblLng": self.cable_length,
-                  "PhyAnalisys": self.phisical_link_recommendation}
+                  "PhyAnalisys": self.physical_link_recommendation}
         return output
 
 
@@ -1366,9 +1366,9 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.mst_device = ""
         self.cable_length = ""
         self.cable_pn = ""
-        self.phisical_link_speed = ""
-        self.phisical_link_recommendation = ""
-        self.phisical_link_status = ""
+        self.physical_link_speed = ""
+        self.physical_link_recommendation = ""
+        self.physical_link_status = ""
 
         sys_prefix = "/sys/devices/virtual/net/" + self.net
 
