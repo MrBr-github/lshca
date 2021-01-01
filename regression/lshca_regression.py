@@ -92,6 +92,7 @@ def regression():
                                   orig - original data
                                   curr - current data
                                 '''))
+    parser.add_argument('--remove-separators', action='store_true', help="Don't show and compare separators")
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
                         help=textwrap.dedent('''\
                                 override saved parameters and pass new ones
@@ -149,6 +150,11 @@ def regression():
 
             f = open(tmp_dir_name + "/output", "rb")
             saved_output = pickle.load(f)
+
+            if args.remove_separators:
+                print(regression_conf.output_separator_char)
+                test_output = re.sub(regression_conf.output_separator_char, '', test_output)
+                saved_output = re.sub(regression_conf.output_separator_char, '', saved_output)
 
             if test_output != saved_output:
                 regression_run_succseeded = False
