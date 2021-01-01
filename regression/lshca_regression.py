@@ -1,11 +1,16 @@
 #!/usr/bin/env python2
 
-from lshca import *
+import sys
+import os
 import tempfile
 import shutil
 import difflib
 import traceback
 
+regr_home = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(regr_home + '/../')
+
+from lshca import *
 
 class DataSourceRecorded(DataSource):
     def read_cmd_output_from_file(self, cmd_prefix, cmd):
