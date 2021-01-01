@@ -528,7 +528,7 @@ class Output(object):
 
                 # ---- Remove PhyAnalisys if there are no issues
                 if "PhyAnalisys" in bdf_device:
-                    if bdf_device["PhyAnalisys"] != "No_issue":
+                    if bdf_device["PhyAnalisys"] != "No_issue" and bdf_device["PhyAnalisys"] != "":
                         remove_phy_analisys = False
 
             if remove_sriov_and_parent:
@@ -1363,6 +1363,12 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.bond_master = ""
         self.bond_mii_status = ""
         self.ip_state = None
+        self.mst_device = ""
+        self.cable_length = ""
+        self.cable_pn = ""
+        self.phisical_link_speed = ""
+        self.phisical_link_recommendation = ""
+        self.phisical_link_status = ""
 
         sys_prefix = "/sys/devices/virtual/net/" + self.net
 
