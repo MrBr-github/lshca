@@ -1197,10 +1197,14 @@ class MlnxBDFDevice(object):
 
     @property
     def roce_status(self):
-        if self.link_layer != "Eth":
+        if self.link_layer == "IB":
             return "N/A"
 
         lossy_status_bitmap_str = ""
+
+        bond_slave = False
+        if self.bond_master != "=N/A=" and self.bond_master != "":
+            bond_slave = True
 
         if self.miscDevice.get_mlnx_qos_trust() == self.config.lossless_roce_expected_trust:
             lossy_status_bitmap_str += "1"
@@ -1212,7 +1216,9 @@ class MlnxBDFDevice(object):
         else:
             lossy_status_bitmap_str += "0"
 
-        if self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass:
+        if bond_slave:
+            lossy_status_bitmap_str += "_"
+        elif self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass:
             lossy_status_bitmap_str += "1"
         else:
             lossy_status_bitmap_str += "0"
@@ -1222,16 +1228,16 @@ class MlnxBDFDevice(object):
         else:
             lossy_status_bitmap_str += "0"
 
-        if self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos:
+        if bond_slave:
+            lossy_status_bitmap_str += "_"
+        elif self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos:
             lossy_status_bitmap_str += "1"
         else:
             lossy_status_bitmap_str += "0"
 
-
-
-        if "1" in lossy_status_bitmap_str and "0" not in lossy_status_bitmap_str:
+        if re.compile('^1+$').match(lossy_status_bitmap_str):
             retval = "Lossless"
-        elif "0" in lossy_status_bitmap_str and "1" not in lossy_status_bitmap_str:
+        elif re.compile('^[0_]+$').match(lossy_status_bitmap_str):
             retval = "Lossy"
         else:
             retval = "Lossy:" + lossy_status_bitmap_str
