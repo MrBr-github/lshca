@@ -93,6 +93,7 @@ def regression():
                                   curr - current data
                                 '''))
     parser.add_argument('--remove-separators', action='store_true', help="Don't show and compare separators")
+    parser.add_argument('--display-recorded-fields', action='store_true', help="Display ONLY originaly recorded fields. Overwrites -p")
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
                         help=textwrap.dedent('''\
                                 override saved parameters and pass new ones
@@ -119,7 +120,16 @@ def regression():
             tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
             tar.extractall(path=tmp_dir_name)
 
-            if args.parameters:
+            if args.display_recorded_fields:
+                try:
+                    f = open(tmp_dir_name + "/output_fields", "r")
+                    recorder_sys_argv = pickle.load(f)
+                except:
+                    print("Error: No output fileds saved")
+                    sys.exit(1)
+                recorder_sys_argv.insert(0, "-o")
+                recorder_sys_argv.insert(0, "lshca_run_by_regression")
+            elif args.parameters:
                 recorder_sys_argv = args.parameters[0].split(" ")
                 recorder_sys_argv.insert(0, "lshca_run_by_regression")
             else:
