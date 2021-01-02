@@ -1,3 +1,11 @@
+Ver. 3.5
+    - Feature: Added cable view.
+               New field are: CblPN, CblLng, PhyLinkStat, PhyLnkSpd, PhyAnalisys
+    - Feature: Added ROCE Lossy bitmap. This allows understanging what's missconfigured
+    - Feature: Added lossless for bond interfaces
+    - Fixed bug: Fixed recording bugs
+    - Fixed bug: Fixed LnkStat elastic
+    - Fixed bug: Stopped ROCE fields query if not required
 Ver. 3.4
     - Feature: Added multiple improvements in bonding display and errors
         - shows bond type
