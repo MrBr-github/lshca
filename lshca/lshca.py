@@ -48,7 +48,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "3.4"
+        self.ver = "3.5"
 
         self.mst_device_enabled = False
         self.sa_smp_query_device_enabled = False
@@ -1445,8 +1445,8 @@ class DataSource(object):
             if not os.path.exists(self.config.record_dir):
                 os.makedirs(self.config.record_dir)
 
-                self.config.record_tar_file = "%s/%s--%s.tar" % (self.config.record_dir, os.uname()[1],
-                                                                 str(time.time()))
+                self.config.record_tar_file = "%s/%s--%s--v%s.tar" % (self.config.record_dir, os.uname()[1],
+                                                                 str(time.time()), self.config.ver)
 
             print "\nlshca started data recording"
             print "output saved in " + self.config.record_tar_file + " file\n"
