@@ -973,9 +973,10 @@ class SYSFSDevice(object):
             roce_tos_path_prefix = "/sys/kernel/config/rdma_cm/" + self.rdma
             roce_tos_path_prefix_cleanup = False
             try:
-                if not os.path.isdir(roce_tos_path_prefix):
+                if data_source.list_dir_if_exists(roce_tos_path_prefix) == "":
                     os.mkdir(roce_tos_path_prefix)
                     roce_tos_path_prefix_cleanup = True
+                    data_source.list_dir_if_exists(roce_tos_path_prefix) # here to record dir if recording enabled
                 self.rdma_cm_tos = data_source.read_file_if_exists(roce_tos_path_prefix +
                                                                    "/ports/1/default_roce_tos").rstrip()
                 if roce_tos_path_prefix_cleanup:
