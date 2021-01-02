@@ -1263,6 +1263,8 @@ class DataSource(object):
             environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
             self.record_data("environment", environment)
 
+            self.record_data("output_fields", self.config.output_order)
+
     def exec_shell_cmd(self, cmd, use_cache=False):
         cache_key = self.cmd_to_str(cmd)
 
