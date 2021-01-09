@@ -1,4 +1,3 @@
-#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
 # Description: This utility comes to provide bird's-eye view of HCAs installed.
@@ -8,11 +7,11 @@
 # Project repo: https://github.com/MrBr-github/lshca
 # License: This utility provided under GNU GPLv3 license
 
+from __future__ import print_function
 import os
 import pickle
 import re
 import sre_constants
-import StringIO
 import subprocess
 import sys
 import tarfile
@@ -20,6 +19,11 @@ import time
 import json
 import argparse
 import textwrap
+
+try:
+    import StringIO ## for Python 2
+except ImportError:
+    import io  ## for Python 3
 
 
 class Config(object):
@@ -213,7 +217,7 @@ class Config(object):
         self.colour_warnings_and_errors = args.colour
 
     def extended_help(self):
-        print textwrap.dedent("""
+        extended_help = textwrap.dedent("""
         --== Detailed fields description ==--
         Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
 
@@ -311,6 +315,7 @@ class Config(object):
         PhyAnalisys  - if no issue detected
 
         """)
+        print(extended_help)
         sys.exit(0)
 
 
@@ -458,7 +463,7 @@ class Output(object):
             try:
                 output_filter[filter_key] = re.compile(output_filter[filter_key])
             except sre_constants.error:
-                print "Error: Invalid pattern \"%s\" passed to output filter " % output_filter[filter_key]
+                print("Error: Invalid pattern \"%s\" passed to output filter " % output_filter[filter_key])
                 sys.exit(1)
 
         for filter_key in output_filter:
@@ -615,15 +620,15 @@ class Output(object):
     def print_output_human_readable(self):
         self.separator = self.config.output_separator_char * self.separator_len
 
-        print self.separator
+        print(self.separator)
         for hca in self.output:
             self.print_hca_header(hca)
-            print self.separator
+            print(self.separator)
             self.print_bdf_devices(hca["bdf_devices"])
-            print self.separator
+            print(self.separator)
 
     def print_output_json(self):
-        print json.dumps(self.output, indent=4, sort_keys=True)
+        print(json.dumps(self.output, indent=4, sort_keys=True))
 
     def print_hca_header(self, args):
         order_dict = {}
@@ -648,7 +653,7 @@ class Output(object):
                               output_list[order_dict[key] + 1:]
 
         if output_list:
-            print '\n'.join(output_list)
+            print('\n'.join(output_list))
 
     def print_bdf_devices(self, args):
         count = 1
@@ -668,8 +673,8 @@ class Output(object):
                         output_list = output_list[0:order_dict[key]] + \
                                       [str("{0:^{width}}".format(key, width=self.column_width[key]))] + \
                                       output_list[order_dict[key] + 1:]
-                print ' | '.join(output_list)
-                print self.separator
+                print(' | '.join(output_list))
+                print(self.separator)
 
             for key in line:
                 if key in order_dict:
@@ -679,7 +684,7 @@ class Output(object):
                                    output_list[order_dict[key] + 1:]
 
             count += 1
-            print ' | '.join(output_list)
+            print(' | '.join(output_list))
 
 
 class MSTDevice(object):
@@ -721,7 +726,7 @@ class MSTDevice(object):
             self._data_source.exec_shell_cmd("mst cable add", use_cache=True)
             MSTDevice.mst_device_enabled = True
         else:
-            print >> sys.stderr, "\n\nError: MST tool is missing\n\n"
+            print("\n\nError: MST tool is missing\n\n", file=sys.stderr)
             # Disable further use.access to mst device
             self._config.mst_device_enabled = False
 
@@ -808,7 +813,7 @@ class SYSFSDevice(object):
 
         self.numa = data_source.read_file_if_exists(sys_prefix + "/numa_node").rstrip()
         if not self.numa:
-            print >> sys.stderr, "Warning: " + self.bdf + " has no NUMA assignment"
+            print("Warning: " + self.bdf + " has no NUMA assignment", file=sys.stderr)
 
         self.rdma = data_source.list_dir_if_exists(sys_prefix + "/infiniband/").rstrip()
         net_list = data_source.list_dir_if_exists(sys_prefix + "/net/")
@@ -1448,8 +1453,8 @@ class DataSource(object):
             self.config.record_tar_file = "%s/%s--%s--v%s.tar" % (self.config.record_dir, os.uname()[1],
                                                                   str(time.time()), self.config.ver)
 
-            print "\nlshca started data recording"
-            print "output saved in " + self.config.record_tar_file + " file\n"
+            print("\nlshca started data recording")
+            print("output saved in " + self.config.record_tar_file + " file\n")
 
             self.stdout = StringIO.StringIO()
             sys.stdout = self.stdout
