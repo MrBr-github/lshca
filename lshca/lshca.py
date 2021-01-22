@@ -720,7 +720,7 @@ class MSTDevice(object):
 
         if mst_installed:
             result = self._data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'", use_cache=True)
-            if result >= 0:
+            if int(result[0]) >= 0:
                 self._data_source.exec_shell_cmd("mst start", use_cache=True)
                 MSTDevice.mst_service_should_be_stopped = True
             self._data_source.exec_shell_cmd("mst cable add", use_cache=True)
@@ -1426,7 +1426,7 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         for slave in slaves:
             slave_speed = data_source.read_file_if_exists(sys_prefix + "/slave_" + slave + "/speed").rstrip()
             if slave_speed:
-                slave_speed = str(int(slave_speed)/1000)
+                slave_speed = str(int(int(slave_speed)/1000))
             if self.port_rate != slave_speed:
                 bond_speed_missmatch = True
 
@@ -1484,6 +1484,9 @@ class DataSource(object):
         else:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, executable="/bin/bash")
             output, error = process.communicate()
+            if isinstance(output, bytes):
+                output = output.decode()
+
             if use_cache is True:
                 self.cache.update({cache_key: output})
 
@@ -1582,7 +1585,6 @@ def extract_string_by_regex(data_string, regex, na_string="=N/A="):
 
 
 def find_in_list(list_to_search_in, regex_pattern):
-    # TBD : refactor to more human readable
     regex = re.compile(regex_pattern)
     result = [m.group(0) for l in list_to_search_in for m in [regex.search(l)] if m]
 
