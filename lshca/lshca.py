@@ -1241,7 +1241,7 @@ class MlnxBDFDevice(object):
         else:
             lossy_status_bitmap_str += "0"
 
-        if re.compile('^1+$').match(lossy_status_bitmap_str):
+        if re.compile('^[1_]+$').match(lossy_status_bitmap_str):
             retval = "Lossless"
         elif re.compile('^[0_]+$').match(lossy_status_bitmap_str):
             retval = "Lossy"
