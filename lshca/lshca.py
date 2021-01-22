@@ -21,9 +21,9 @@ import argparse
 import textwrap
 
 try:
-    import StringIO ## for Python 2
+    from StringIO import StringIO # for Python 2
 except ImportError:
-    import io  ## for Python 3
+    from io import StringIO, BytesIO # for Python 3
 
 
 class Config(object):
@@ -1456,13 +1456,17 @@ class DataSource(object):
             print("\nlshca started data recording")
             print("output saved in " + self.config.record_tar_file + " file\n")
 
-            self.stdout = StringIO.StringIO()
+            self.stdout = StringIO()
             sys.stdout = self.stdout
 
     def __del__(self):
         if self.config.record_data_for_debug is True:
             sys.stdout = sys.__stdout__
-            self.record_data("cmd", "lshca " + " ".join(sys.argv[1:]))
+            try:
+                args_str = " ".join(sys.argv[1:])
+            except:
+                args_str = ""
+            self.record_data("cmd", "lshca " + args_str)
             self.record_data("output", self.stdout.getvalue())
 
             self.config.record_data_for_debug = False
@@ -1499,7 +1503,12 @@ class DataSource(object):
 
     def record_data(self, cmd, output):
         p_output = pickle.dumps(output)
-        # file_name = self.cmd_to_str(cmd)
+
+        if sys.version_info.major == 3:
+            tar_contents = BytesIO(p_output)
+        else:
+            tar_contents = StringIO(p_output)
+
         file_name = cmd
 
         tarinfo = tarfile.TarInfo(file_name)
@@ -1507,7 +1516,7 @@ class DataSource(object):
         tarinfo.mtime = time.time()
 
         tar = tarfile.open(name=self.config.record_tar_file, mode='a')
-        tar.addfile(tarinfo, StringIO.StringIO(p_output))
+        tar.addfile(tarinfo, tar_contents)
         tar.close()
 
     def read_file_if_exists(self, file_to_read):
