@@ -39,7 +39,7 @@ class Config(object):
                            "VrtHCA", "PLid", "PGuid", "IbNetPref"],
                     "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "RoCEstat"],
-                    "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "MST_device",  "CblPN", "CblLng",
+                    "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
                               "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"]
         }
         self.output_order = self.output_order_general[self.output_view]
@@ -285,6 +285,7 @@ class Config(object):
          Cable view   (use source utils for more info)
           MST_device    - MST device name. Source mst
           CblPN         - Part number of the connected cable. Source mlxcable
+          CblSN         - Serial number of the connected cable. Source mlxcable
           CblLng        - Length of the connected cable. Source mlxcable
           PhyAnalisys   - If something goes wrong, some analisys will be shown to assist in issue resolution. Source mlxlink
           PhyLinkStat   - Status of the physical link. May differ from its logical state. Source mlxlink
@@ -1036,6 +1037,7 @@ class MlxCable(object):
 
         self.cable_length = ""
         self.cable_pn = ""
+        self.cable_sn = ""
 
     def get_data(self, mst_cable):
         if mst_cable == "":
@@ -1043,6 +1045,7 @@ class MlxCable(object):
         data = self._data_source.exec_shell_cmd("mlxcables -d " + mst_cable, use_cache=True)
         self.cable_length = search_in_list_and_extract_by_regex(data, r'Length +:.*', r'Length +:(.*)').replace(" ", "")
         self.cable_pn = search_in_list_and_extract_by_regex(data, r'Part number +:.*', r'Part number +:(.*)').replace(" ", "")
+        self.cable_sn = search_in_list_and_extract_by_regex(data, r'Serial number +:.*', r'Serial number +:(.*)').replace(" ", "")
 
 
 class MlxLink(object):
@@ -1176,6 +1179,7 @@ class MlnxBDFDevice(object):
             self.mlxCable.get_data(self.mst_cable)
         self.cable_length = self.mlxCable.cable_length
         self.cable_pn = self.mlxCable.cable_pn
+        self.cable_sn = self.mlxCable.cable_sn
 
         self.miscDevice = MiscCMDs(self.net, self.rdma, data_source, self.config)
         self.tempr = self.miscDevice.get_tempr()
@@ -1291,6 +1295,7 @@ class MlnxBDFDevice(object):
                   "PhyLinkStat": self.physical_link_status ,
                   "PhyLnkSpd": self.physical_link_speed,
                   "CblPN": self.cable_pn,
+                  "CblSN": self.cable_sn,
                   "CblLng": self.cable_length,
                   "PhyAnalisys": self.physical_link_recommendation}
         return output
@@ -1377,6 +1382,7 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.mst_device = ""
         self.cable_length = ""
         self.cable_pn = ""
+        self.cable_sn = ""
         self.physical_link_speed = ""
         self.physical_link_recommendation = ""
         self.physical_link_status = ""

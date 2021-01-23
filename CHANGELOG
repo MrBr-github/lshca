@@ -1,6 +1,6 @@
 Ver. 3.5
     - Feature: Added cable view.
-               New field are: CblPN, CblLng, PhyLinkStat, PhyLnkSpd, PhyAnalisys
+               New field are: CblPN, CblSN, CblLng, PhyLinkStat, PhyLnkSpd, PhyAnalisys
     - Feature: Added ROCE Lossy bitmap. This allows understanging what's missconfigured
     - Feature: Added lossless for bond interfaces
     - Fixed bug: Fixed recording bugs
