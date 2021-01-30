@@ -756,13 +756,15 @@ class MSTDevice(object):
 
 class PCIDevice(object):
     def __init__(self, bdf, data_source, config):
-        self.bdf = bdf
-        self.config = config
-        self.bdWithoutF = self.bdf.split(".", 1)[0]
-        self.data = data_source.exec_shell_cmd("lspci -vvvD -s" + bdf, use_cache=True)
+        self._bdf = bdf
+        self._config = config
+        self._data_source = data_source
+
+    def get_data(self):
+        self._data = self._data_source.exec_shell_cmd("lspci -vvvD -s" + self._bdf, use_cache=True)
         # Handling following string, taking reset of string after HCA type
         # 0000:01:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
-        self.description = self.get_info_from_lspci_data("^[0-9].*", str(self.bdf) + ".*:(.+)")
+        self.description = self.get_info_from_lspci_data("^[0-9].*", str(self._bdf) + ".*:(.+)")
         self.sn = self.get_info_from_lspci_data("\[SN\].*", ".*:(.+)")
         self._pn = self.get_info_from_lspci_data("\[PN\].*", ".*:(.+)")
         self.revision = self.get_info_from_lspci_data("\[EC\].*", ".*:(.+)")
@@ -771,15 +773,15 @@ class PCIDevice(object):
         self.pciGen = self.get_info_from_lspci_data(".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn].*",
                                                     ".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn]([0-9]) +")
 
-        if self.lnkCapWidth != self.lnkStaWidth and self.config.show_warnings_and_errors is True:
-            self.lnkStaWidth = str(self.lnkStaWidth) + self.config.error_sign
+        if self.lnkCapWidth != self.lnkStaWidth and self._config.show_warnings_and_errors is True:
+            self.lnkStaWidth = str(self.lnkStaWidth) + self._config.error_sign
 
         self.lnkCapWidth = str(self.lnkCapWidth) + " G" + str(self.pciGen)
 
     def __repr__(self):
         delim = " "
         return "PCI device:" + delim +\
-               self.bdf + delim + \
+               self._bdf + delim + \
                self.sn + delim + \
                self.pn + delim +\
                "\"" + self.description + "\""
@@ -792,7 +794,7 @@ class PCIDevice(object):
             return self._pn
 
     def get_info_from_lspci_data(self, search_regex, output_regex):
-        search_result = find_in_list(self.data, search_regex)
+        search_result = find_in_list(self._data, search_regex)
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
 
@@ -1157,11 +1159,11 @@ class MlnxBDFDevice(object):
         self.bond_mii_status = self.sysFSDevice.bond_mii_status
 
         self.pciDevice = PCIDevice(self.bdf, data_source, self.config)
+        self.pciDevice.get_data()
         self.description = self.pciDevice.description
-        if self.sriov != "VF":
-            self.lnkCapWidth = self.pciDevice.lnkCapWidth
-            self.lnkStaWidth = self.pciDevice.lnkStaWidth
-        else:
+        self.lnkCapWidth = self.pciDevice.lnkCapWidth
+        self.lnkStaWidth = self.pciDevice.lnkStaWidth
+        if self.sriov == "VF":
             self.lnkCapWidth = ""
             self.lnkStaWidth = ""
         self.pn = self.pciDevice.pn
