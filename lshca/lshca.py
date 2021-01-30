@@ -1002,29 +1002,34 @@ class SYSFSDevice(object):
 
 class SaSmpQueryDevice(object):
     def __init__(self, rdma, port, plid, smlid, data_source, config):
+        self._data_source = data_source
+        self._port = port
+        self._rdma = rdma
+        self._smlid = smlid
+        self._config = config
+
         self.sw_guid = ""
         self.sw_description = ""
         self.sm_guid = ""
-        self.config = config
 
-        if self.config.sa_smp_query_device_enabled:
-            if "SMGuid" not in self.config.output_order:
-                self.config.output_order.append("SMGuid")
-            if "SwGuid" not in self.config.output_order:
-                self.config.output_order.append("SwGuid")
-            if "SwDescription" not in self.config.output_order:
-                self.config.output_order.append("SwDescription")
+    def get_data(self):
+        if "SMGuid" not in self._config.output_order:
+            self._config.output_order.append("SMGuid")
+        if "SwGuid" not in self._config.output_order:
+            self._config.output_order.append("SwGuid")
+        if "SwDescription" not in self._config.output_order:
+            self._config.output_order.append("SwDescription")
 
-            self.data = data_source.exec_shell_cmd("smpquery -C " + rdma + " -P " + port + " NI -D  0,1")
-            self.sw_guid = self.get_info_from_sa_smp_query_data(".*SystemGuid.*", "\.+(.*)")
-            self.sw_guid = extract_string_by_regex(self.sw_guid, "0x(.*)")
+        self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " NI -D  0,1")
+        self.sw_guid = self.get_info_from_sa_smp_query_data(".*SystemGuid.*", "\.+(.*)")
+        self.sw_guid = extract_string_by_regex(self.sw_guid, "0x(.*)")
 
-            self.data = data_source.exec_shell_cmd("smpquery -C " + rdma + " -P " + port + " ND -D  0,1")
-            self.sw_description = self.get_info_from_sa_smp_query_data(".*Node *Description.*", "\.+(.*)")
+        self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " ND -D  0,1")
+        self.sw_description = self.get_info_from_sa_smp_query_data(".*Node *Description.*", "\.+(.*)")
 
-            self.data = data_source.exec_shell_cmd("saquery SMIR -C " + rdma + " -P " + port + " " + smlid)
-            self.sm_guid = self.get_info_from_sa_smp_query_data(".*GUID.*", "\.+(.*)")
-            self.sm_guid = extract_string_by_regex(self.sm_guid, "0x(.*)")
+        self.data = self._data_source.exec_shell_cmd("saquery SMIR -C " + self._rdma + " -P " + self._port + " " + self._smlid)
+        self.sm_guid = self.get_info_from_sa_smp_query_data(".*GUID.*", "\.+(.*)")
+        self.sm_guid = extract_string_by_regex(self.sm_guid, "0x(.*)")
 
     def get_info_from_sa_smp_query_data(self, search_regex, output_regex):
         search_result = find_in_list(self.data, search_regex)
@@ -1187,6 +1192,8 @@ class MlnxBDFDevice(object):
 
         self.sasmpQueryDevice = SaSmpQueryDevice(self.rdma, self.port, self.plid, self.smlid,
                                                  data_source, self.config)
+        if self.config.sa_smp_query_device_enabled:
+            self.sasmpQueryDevice.get_data()
         self.sw_guid = self.sasmpQueryDevice.sw_guid
         self.sw_description = self.sasmpQueryDevice.sw_description
         self.sm_guid = self.sasmpQueryDevice.sm_guid
