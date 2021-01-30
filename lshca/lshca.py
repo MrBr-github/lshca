@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Description: This utility comes to provide bird's-eye view of HCAs installed.
