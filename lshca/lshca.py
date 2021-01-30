@@ -806,7 +806,7 @@ class SYSFSDevice(object):
         sys_prefix = "/sys/bus/pci/devices/" + self.bdf
 
         vf_parent_file = data_source.read_link_if_exists(sys_prefix + "/physfn")
-        if vf_parent_file is not "":
+        if vf_parent_file != "":
             self.sriov = "VF"
             self.vfParent = extract_string_by_regex(vf_parent_file, ".*\/([0-9].*)")
         else:
