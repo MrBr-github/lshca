@@ -2,13 +2,13 @@ from setuptools import setup
 setup(
   name = 'lshca',
   packages = ['lshca'],
-  version = '3.4.1',
+  version = '3.5',
   license='GNU GPLv3',
   description = 'This utility comes to provide bird\'s-eye view of HCAs installed',
   author = 'Michael Braverman',
   author_email = 'mrbr.mail@gmail.com',
   url = 'https://github.com/MrBr-github/lshca',
-  download_url = 'https://github.com/MrBr-github/lshca/archive/v3.4.tar.gz',
+  download_url = 'https://github.com/MrBr-github/lshca/archive/v3.5.tar.gz',
   keywords = ['HCA', 'INFINIBAND'],
 #  install_requires=[  '', '', ],
   classifiers=[
@@ -16,7 +16,8 @@ setup(
     'Intended Audience :: System Administrators', 
     'Intended Audience :: Information Technology',
     'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-    'Programming Language :: Python :: 2.7'      
+    'Programming Language :: Python :: 2.7',
+    'Programming Language :: Python :: 3'
   ],
   entry_points={
     'console_scripts': [

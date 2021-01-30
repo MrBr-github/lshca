@@ -1,4 +1,5 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # Description: This utility comes to provide bird's-eye view of HCAs installed.
 #              It's mainly intended for system administrators, thus defaults configured accordingly.
@@ -7,11 +8,11 @@
 # Project repo: https://github.com/MrBr-github/lshca
 # License: This utility provided under GNU GPLv3 license
 
+from __future__ import print_function
 import os
 import pickle
 import re
 import sre_constants
-import StringIO
 import subprocess
 import sys
 import tarfile
@@ -19,6 +20,11 @@ import time
 import json
 import argparse
 import textwrap
+
+try:
+    from StringIO import StringIO # for Python 2
+except ImportError:
+    from io import StringIO, BytesIO # for Python 3
 
 
 class Config(object):
@@ -33,7 +39,9 @@ class Config(object):
                     "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
                            "VrtHCA", "PLid", "PGuid", "IbNetPref"],
                     "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
-                             "IpStat", "RoCEstat"]
+                             "IpStat", "RoCEstat"],
+                    "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
+                              "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -45,7 +53,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "3.4"
+        self.ver = "3.5"
 
         self.mst_device_enabled = False
         self.sa_smp_query_device_enabled = False
@@ -57,6 +65,7 @@ class Config(object):
         self.output_fields_filter_negative = ""
         self.where_output_filter = ""
 
+        # based on https://community.mellanox.com/s/article/lossless-roce-configuration-for-linux-drivers-in-dscp-based-qos-mode
         self.lossless_roce_expected_trust = "dscp"
         self.lossless_roce_expected_pfc = "00010000"
         self.lossless_roce_expected_gtclass = "Global tclass=106"
@@ -92,12 +101,14 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'all'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'all'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
                               ib     - Show IB oriented HCA info. Implies "sasmpquery" data source
                               roce   - Show RoCE oriented HCA info"
+                              cable  - Show cable and physical link HCA info. Based on mlxcable and mlxlink utils.
+                                       Note: It takes time to display this view due to underling utils execution time.
                               all    - Show all available HCA info. Aggregates all above views + MST data source.
                               Note: all human readable output views are elastic. See extended help for more info.
                             ''')
@@ -155,6 +166,8 @@ class Config(object):
             self.output_view = "roce"
         elif args.view == "system":
             self.output_view = "system"
+        elif args.view == "cable":
+            self.output_view = "cable"
         elif args.view == "all":
             self.mst_device_enabled = True
             self.sa_smp_query_device_enabled = True
@@ -204,9 +217,8 @@ class Config(object):
 
         self.colour_warnings_and_errors = args.colour
 
-    @staticmethod
-    def extended_help():
-        print textwrap.dedent("""
+    def extended_help(self):
+        extended_help = textwrap.dedent("""
         --== Detailed fields description ==--
         Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
 
@@ -270,11 +282,26 @@ class Config(object):
                             Phys - Physical HCA port. For example, you could run openSM this ports
                             Virt - Virtual HCA port.
                             NA   - IB link - not supported with mlx4 driver OR non IB link
+
+         Cable view   (use source utils for more info)
+          MST_device    - MST device name. Source mst
+          CblPN         - Part number of the connected cable. Source mlxcable
+          CblSN         - Serial number of the connected cable. Source mlxcable
+          CblLng        - Length of the connected cable. Source mlxcable
+          PhyAnalisys   - If something goes wrong, some analisys will be shown to assist in issue resolution. Source mlxlink
+          PhyLinkStat   - Status of the physical link. May differ from its logical state. Source mlxlink
+          PhyLnkSpd     - Speed of the physical link. I.e protocol used for communication. Source mlxlink
+
          RoCE view
           RoCEstat      - RoCE status. Possible values:
-                            Lossless - Port configured with Lossless port configurations.
-                            Lossy    - Port configured with Lossy port configurations
-
+                            Lossless       - Port configured with Lossless port configurations.
+                            Lossy[:bitmap] - Port configured with Lossy port configurations
+                                   XXXXX     Bitmap will appear if lossless configuration is partial
+                                   ││││└─ rdma_cm_tos - expected \"""" + self.lossless_roce_expected_rdma_cm_tos + """\"
+                                   │││└── tcp_ecn  - expected \"""" + self.lossless_roce_expected_tcp_ecn + """\"
+                                   ││└─── gtclass - expected \"""" + self.lossless_roce_expected_gtclass + """\"
+                                   │└──── pfc - expected \"""" + self.lossless_roce_expected_pfc + """\"
+                                   └───── trust - expected \"""" + self.lossless_roce_expected_trust + """\"
 
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
@@ -287,8 +314,10 @@ class Config(object):
         IpStat       - if all LnkStat valuse are "down"
         Bond, BondState, BondMiiStat
                      - if no bond device configured
+        PhyAnalisys  - if no issue detected
 
         """)
+        print(extended_help)
         sys.exit(0)
 
 
@@ -436,7 +465,7 @@ class Output(object):
             try:
                 output_filter[filter_key] = re.compile(output_filter[filter_key])
             except sre_constants.error:
-                print "Error: Invalid pattern \"%s\" passed to output filter " % output_filter[filter_key]
+                print("Error: Invalid pattern \"%s\" passed to output filter " % output_filter[filter_key])
                 sys.exit(1)
 
         for filter_key in output_filter:
@@ -468,6 +497,7 @@ class Output(object):
             remove_lnk_stat = True
             remove_ip_stat = True
             remove_bond = True
+            remove_phy_analisys = True
 
             for bdf_device in hca["bdf_devices"]:
                 # ---- Removing SRIOV and Parent_addr if no VFs present
@@ -494,14 +524,19 @@ class Output(object):
 
                 # ---- Remove LnkStat if all are actv
                 if "LnkStat" in bdf_device:
-                    if ( bdf_device["LnkStat"].strip() != "actv" and bdf_device["Bond"] == "" ) or \
-                       ( bdf_device["LnkStat"].strip() != "" and bdf_device["Bond"] != "" ):
+                    if ( bdf_device["LnkStat"].strip() != "actv" and ( bdf_device["Bond"] == "" or bdf_device["Bond"] == "=N/A=" ) ) or \
+                       ( bdf_device["LnkStat"].strip() != "" and ( bdf_device["Bond"] != "" and  bdf_device["Bond"] != "=N/A=" ) ):
                         remove_lnk_stat = False
 
                 # ---- Remove bond related fields if no bond configured
                 if "Bond" in bdf_device:
                     if bdf_device["Bond"].strip() and bdf_device["Bond"].strip() != "=N/A=":
                         remove_bond = False
+
+                # ---- Remove PhyAnalisys if there are no issues
+                if "PhyAnalisys" in bdf_device:
+                    if bdf_device["PhyAnalisys"] != "No_issue" and bdf_device["PhyAnalisys"] != "":
+                        remove_phy_analisys = False
 
             if remove_sriov_and_parent:
                 hca_fields_for_removal.append("SRIOV")
@@ -518,6 +553,8 @@ class Output(object):
                 hca_fields_for_removal.append("Bond")
                 hca_fields_for_removal.append("BondState")
                 hca_fields_for_removal.append("BondMiiStat")
+            if remove_phy_analisys:
+                hca_fields_for_removal.append("PhyAnalisys")
 
             for field in hca_fields_for_removal:
                 if field in hca:
@@ -585,15 +622,15 @@ class Output(object):
     def print_output_human_readable(self):
         self.separator = self.config.output_separator_char * self.separator_len
 
-        print self.separator
+        print(self.separator)
         for hca in self.output:
             self.print_hca_header(hca)
-            print self.separator
+            print(self.separator)
             self.print_bdf_devices(hca["bdf_devices"])
-            print self.separator
+            print(self.separator)
 
     def print_output_json(self):
-        print json.dumps(self.output, indent=4, sort_keys=True)
+        print(json.dumps(self.output, indent=4, sort_keys=True))
 
     def print_hca_header(self, args):
         order_dict = {}
@@ -618,7 +655,7 @@ class Output(object):
                               output_list[order_dict[key] + 1:]
 
         if output_list:
-            print '\n'.join(output_list)
+            print('\n'.join(output_list))
 
     def print_bdf_devices(self, args):
         count = 1
@@ -638,8 +675,8 @@ class Output(object):
                         output_list = output_list[0:order_dict[key]] + \
                                       [str("{0:^{width}}".format(key, width=self.column_width[key]))] + \
                                       output_list[order_dict[key] + 1:]
-                print ' | '.join(output_list)
-                print self.separator
+                print(' | '.join(output_list))
+                print(self.separator)
 
             for key in line:
                 if key in order_dict:
@@ -649,65 +686,72 @@ class Output(object):
                                    output_list[order_dict[key] + 1:]
 
             count += 1
-            print ' | '.join(output_list)
+            print(' | '.join(output_list))
 
 
 class MSTDevice(object):
-    def __init__(self, bdf, data_source, config):
-        self.bdf = bdf
-        self.config = config
+    mst_device_enabled = False
+    mst_service_initialized = False
+    mst_service_should_be_stopped = False
+
+    def __init__(self, data_source, config):
+        self._config = config
+        self._data_source = data_source
+        self._mst_raw_data = None
+
         self.mst_device = ""
-        self.mst_raw_data = "No MST data"
-        self.bdf_short_format = True
-        mst_init_running = False
+        self.mst_cable = ""
 
-        if self.config.mst_device_enabled:
-            if "MST_device" not in self.config.output_order:
-                self.config.output_order.append("MST_device")
-
-            result = data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
-            if result == ["0"]:
-                mst_installed = True
-            else:
-                mst_installed = False
-
-            if mst_installed:
-                result = data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'",
-                                                    use_cache=True)
-                if result != ["0"]:
-                    mst_init_running = True
-
-                if not mst_init_running:
-                    data_source.exec_shell_cmd("mst start", use_cache=True)
-
-                self.mst_raw_data = data_source.exec_shell_cmd("mst status -v", use_cache=True)
-                self.got_raw_data = True
-
-                if not mst_init_running:
-                    data_source.exec_shell_cmd("mst stop", use_cache=True)
-
-                # Same lspci cmd used in HCAManager in order to benefit from cache
-                lspci_raw_data = data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
-                for line in lspci_raw_data:
-                    pci_domain = extract_string_by_regex(line, "([0-9]{4}):.*")
-                    if pci_domain != "0000":
-                        self.bdf_short_format = False
-
-                if self.bdf_short_format:
-                    self.bdf = extract_string_by_regex(self.bdf, "[0-9]{4}:(.*)")
-
-                for line in self.mst_raw_data:
-                    data_line = extract_string_by_regex(line, "(.*" + self.bdf + ".*)")
-                    if data_line != "=N/A=":
-                        mst_device = extract_string_by_regex(data_line, ".* (/dev/mst/[^\s]+) .*")
-                        self.mst_device = mst_device
-            else:
-                print >> sys.stderr, "\n\nError: MST tool is missing\n\n"
-                # Disable further use.access to mst device
-                self.config.mst_device_enabled = False
+    def __del__(self):
+        if MSTDevice.mst_service_should_be_stopped:
+            self._data_source.exec_shell_cmd("mst stop", use_cache=True)
+            MSTDevice.mst_service_should_be_stopped = False
 
     def __repr__(self):
-        return self.mst_raw_data
+        return self._mst_raw_data
+
+    def init_mst_service(self):
+        if MSTDevice.mst_service_initialized:
+            return
+
+        result = self._data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
+        if result == ["0"]:
+            mst_installed = True
+        else:
+            mst_installed = False
+
+        if mst_installed:
+            result = self._data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'", use_cache=True)
+            if int(result[0]) >= 0:
+                self._data_source.exec_shell_cmd("mst start", use_cache=True)
+                MSTDevice.mst_service_should_be_stopped = True
+            self._data_source.exec_shell_cmd("mst cable add", use_cache=True)
+            MSTDevice.mst_device_enabled = True
+        else:
+            print("\n\nError: MST tool is missing\n\n", file=sys.stderr)
+            # Disable further use.access to mst device
+            self._config.mst_device_enabled = False
+
+        MSTDevice.mst_service_initialized = True
+
+    def get_data(self, bdf):
+        if not MSTDevice.mst_device_enabled:
+            return
+
+        mst_device_suffix = "None"
+        self._mst_raw_data = self._data_source.exec_shell_cmd("mst status -v", use_cache=True)
+        bdf_short = extract_string_by_regex(bdf, "0000:(.+)")
+        if bdf_short == "=N/A=":
+            bdf_short = bdf
+
+        for line in self._mst_raw_data:
+            data_line = extract_string_by_regex(line, "(.*" + bdf_short + ".*)")
+
+            if data_line != "=N/A=":
+                self.mst_device = extract_string_by_regex(data_line, r".* (/dev/mst/[^\s]+) .*")
+                mst_device_suffix = extract_string_by_regex(data_line, r"/dev/mst/([^\s]+)")
+
+        self.mst_cable = find_in_list(self._mst_raw_data, r"({}_cable_[^\s]+)".format(mst_device_suffix)).strip()
 
 
 class PCIDevice(object):
@@ -762,7 +806,7 @@ class SYSFSDevice(object):
         sys_prefix = "/sys/bus/pci/devices/" + self.bdf
 
         vf_parent_file = data_source.read_link_if_exists(sys_prefix + "/physfn")
-        if vf_parent_file is not "":
+        if vf_parent_file != "":
             self.sriov = "VF"
             self.vfParent = extract_string_by_regex(vf_parent_file, ".*\/([0-9].*)")
         else:
@@ -771,7 +815,7 @@ class SYSFSDevice(object):
 
         self.numa = data_source.read_file_if_exists(sys_prefix + "/numa_node").rstrip()
         if not self.numa:
-            print >> sys.stderr, "Warning: " + self.bdf + " has no NUMA assignment"
+            print("Warning: " + self.bdf + " has no NUMA assignment", file=sys.stderr)
 
         self.rdma = data_source.list_dir_if_exists(sys_prefix + "/infiniband/").rstrip()
         net_list = data_source.list_dir_if_exists(sys_prefix + "/net/")
@@ -936,9 +980,10 @@ class SYSFSDevice(object):
             roce_tos_path_prefix = "/sys/kernel/config/rdma_cm/" + self.rdma
             roce_tos_path_prefix_cleanup = False
             try:
-                if not os.path.isdir(roce_tos_path_prefix):
+                if data_source.list_dir_if_exists(roce_tos_path_prefix) == "":
                     os.mkdir(roce_tos_path_prefix)
                     roce_tos_path_prefix_cleanup = True
+                    data_source.list_dir_if_exists(roce_tos_path_prefix) # here to record dir if recording enabled
                 self.rdma_cm_tos = data_source.read_file_if_exists(roce_tos_path_prefix +
                                                                    "/ports/1/default_roce_tos").rstrip()
                 if roce_tos_path_prefix_cleanup:
@@ -985,6 +1030,56 @@ class SaSmpQueryDevice(object):
         search_result = find_in_list(self.data, search_regex)
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
+
+
+class MlxCable(object):
+    def __init__(self, data_source):
+        self._data_source = data_source
+
+        self.cable_length = ""
+        self.cable_pn = ""
+        self.cable_sn = ""
+
+    def get_data(self, mst_cable):
+        if mst_cable == "":
+            return
+        data = self._data_source.exec_shell_cmd("mlxcables -d " + mst_cable, use_cache=True)
+        self.cable_length = search_in_list_and_extract_by_regex(data, r'Length +:.*', r'Length +:(.*)').replace(" ", "")
+        self.cable_pn = search_in_list_and_extract_by_regex(data, r'Part number +:.*', r'Part number +:(.*)').replace(" ", "")
+        self.cable_sn = search_in_list_and_extract_by_regex(data, r'Serial number +:.*', r'Serial number +:(.*)').replace(" ", "")
+
+
+class MlxLink(object):
+    def __init__(self, data_source):
+        self._data_source = data_source
+
+        self.physical_link_recommendation = ""
+        self.physical_link_speed = ""
+        self.physical_link_status = ""
+
+    def get_data(self, mst_device, port):
+        if mst_device == "":
+            return
+        data = self._data_source.exec_shell_cmd("mlxlink -d {} -p {} --json".format(mst_device, port), use_cache=True)
+        try:
+            json_data = json.loads("".join(data))
+        except (TypeError, ValueError):
+            return
+
+        if "result" in json_data and \
+           "output" in json_data["result"]:
+            if "Operational Info" in json_data["result"]["output"]:
+                if "Physical state" in  json_data["result"]["output"]["Operational Info"]:
+                   self.physical_link_status = json_data["result"]["output"]["Operational Info"]["Physical state"]
+                if "Speed" in  json_data["result"]["output"]["Operational Info"]:
+                    self.physical_link_speed = json_data["result"]["output"]["Operational Info"]["Speed"]
+            if "Troubleshooting Info" in json_data["result"]["output"]:
+                if "Recommendation" in json_data["result"]["output"]["Troubleshooting Info"]:
+                    self.physical_link_recommendation = json_data["result"]["output"]["Troubleshooting Info"]["Recommendation"]
+                    self.physical_link_recommendation = self.physical_link_recommendation.replace(" ", "_")
+
+                    if self.physical_link_recommendation == "No_issue_was_observed.":
+                        self.physical_link_recommendation = "No_issue"
 
 
 class MiscCMDs(object):
@@ -1064,8 +1159,28 @@ class MlnxBDFDevice(object):
         self.pn = self.pciDevice.pn
         self.sn = self.pciDevice.sn
 
-        self.mstDevice = MSTDevice(self.bdf, data_source, self.config)
+        self.mstDevice = MSTDevice(data_source, self.config)
+        if self.config.output_view == "cable" or self.config.mst_device_enabled or self.config.output_view == "all":
+            self.mstDevice.init_mst_service()
+            self.mstDevice.get_data(bdf)
+            if "MST_device" not in self.config.output_order:
+                self.config.output_order.append("MST_device")
         self.mst_device = self.mstDevice.mst_device
+        self.mst_cable = self.mstDevice.mst_cable
+
+        self.mlxLink = MlxLink(data_source)
+        if self.config.output_view == "cable" or self.config.output_view == "all":
+            self.mlxLink.get_data(self.mst_device, self.port)
+        self.physical_link_speed = self.mlxLink.physical_link_speed
+        self.physical_link_status = self.mlxLink.physical_link_status
+        self.physical_link_recommendation = self.mlxLink.physical_link_recommendation
+
+        self.mlxCable = MlxCable(data_source)
+        if self.config.output_view == "cable" or self.config.output_view == "all":
+            self.mlxCable.get_data(self.mst_cable)
+        self.cable_length = self.mlxCable.cable_length
+        self.cable_pn = self.mlxCable.cable_pn
+        self.cable_sn = self.mlxCable.cable_sn
 
         self.miscDevice = MiscCMDs(self.net, self.rdma, data_source, self.config)
         self.tempr = self.miscDevice.get_tempr()
@@ -1098,17 +1213,54 @@ class MlnxBDFDevice(object):
 
     @property
     def roce_status(self):
-        if self.link_layer != "Eth":
+        if self.link_layer == "IB" or self.config.output_view != "roce":
             return "N/A"
+        
+        lossy_status_bitmap_str = ""
 
-        if self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass and \
-           self.sysFSDevice.tcp_ecn == self.config.lossless_roce_expected_tcp_ecn and \
-           self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos and \
-           self.miscDevice.get_mlnx_qos_trust() == self.config.lossless_roce_expected_trust and \
-           self.miscDevice.get_mlnx_qos_pfc() == self.config.lossless_roce_expected_pfc:
-            return "Lossless"
+        bond_slave = False
+        if self.bond_master != "=N/A=" and self.bond_master != "":
+            bond_slave = True
+
+        if self.miscDevice.get_mlnx_qos_trust() == self.config.lossless_roce_expected_trust:
+            lossy_status_bitmap_str += "1"
         else:
-            return "Lossy"
+            lossy_status_bitmap_str += "0"
+
+        if self.miscDevice.get_mlnx_qos_pfc() == self.config.lossless_roce_expected_pfc:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if bond_slave:
+            lossy_status_bitmap_str += "_"
+        elif self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if self.sysFSDevice.tcp_ecn == self.config.lossless_roce_expected_tcp_ecn:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if bond_slave:
+            lossy_status_bitmap_str += "_"
+        elif self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if re.compile('^[1_]+$').match(lossy_status_bitmap_str):
+            retval = "Lossless"
+        elif re.compile('^[0_]+$').match(lossy_status_bitmap_str):
+            retval = "Lossy"
+        else:
+            retval = "Lossy:" + lossy_status_bitmap_str
+            if self.config.show_warnings_and_errors is True:
+                return retval + self.config.warning_sign
+
+        return retval
 
     def output_info(self):
         if self.sriov in ("PF", "PF" + self.config.warning_sign):
@@ -1140,7 +1292,13 @@ class MlnxBDFDevice(object):
                   "RoCEstat": self.roce_status,
                   "Bond": self.bond_master,
                   "BondState": self.bond_state,
-                  "BondMiiStat": self.bond_mii_status}
+                  "BondMiiStat": self.bond_mii_status,
+                  "PhyLinkStat": self.physical_link_status ,
+                  "PhyLnkSpd": self.physical_link_speed,
+                  "CblPN": self.cable_pn,
+                  "CblSN": self.cable_sn,
+                  "CblLng": self.cable_length,
+                  "PhyAnalisys": self.physical_link_recommendation}
         return output
 
 
@@ -1214,7 +1372,6 @@ class MlnxHCA(object):
                 bdf.bond_state = bdf.bond_state + self.config.error_sign
 
 
-
 class MlnxRdmaBondDevice(MlnxBDFDevice):
     def fix_rdma_bond(self, data_source):
         index = extract_string_by_regex(self.rdma, ".*([0-9]+)$")
@@ -1223,6 +1380,13 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.bond_master = ""
         self.bond_mii_status = ""
         self.ip_state = None
+        self.mst_device = ""
+        self.cable_length = ""
+        self.cable_pn = ""
+        self.cable_sn = ""
+        self.physical_link_speed = ""
+        self.physical_link_recommendation = ""
+        self.physical_link_status = ""
 
         sys_prefix = "/sys/devices/virtual/net/" + self.net
 
@@ -1269,7 +1433,7 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         for slave in slaves:
             slave_speed = data_source.read_file_if_exists(sys_prefix + "/slave_" + slave + "/speed").rstrip()
             if slave_speed:
-                slave_speed = str(int(slave_speed)/1000)
+                slave_speed = str(int(int(slave_speed)/1000))
             if self.port_rate != slave_speed:
                 bond_speed_missmatch = True
 
@@ -1293,19 +1457,23 @@ class DataSource(object):
             if not os.path.exists(self.config.record_dir):
                 os.makedirs(self.config.record_dir)
 
-                self.config.record_tar_file = "%s/%s--%s.tar" % (self.config.record_dir, os.uname()[1],
-                                                                 str(time.time()))
+            self.config.record_tar_file = "%s/%s--%s--v%s.tar" % (self.config.record_dir, os.uname()[1],
+                                                                  str(time.time()), self.config.ver)
 
-            print "\nlshca started data recording"
-            print "output saved in " + self.config.record_tar_file + " file\n"
+            print("\nlshca started data recording")
+            print("output saved in " + self.config.record_tar_file + " file\n")
 
-            self.stdout = StringIO.StringIO()
+            self.stdout = StringIO()
             sys.stdout = self.stdout
 
     def __del__(self):
         if self.config.record_data_for_debug is True:
             sys.stdout = sys.__stdout__
-            self.record_data("cmd", "lshca " + " ".join(sys.argv[1:]))
+            try:
+                args_str = " ".join(sys.argv[1:])
+            except:
+                args_str = ""
+            self.record_data("cmd", "lshca " + args_str)
             self.record_data("output", self.stdout.getvalue())
 
             self.config.record_data_for_debug = False
@@ -1327,6 +1495,9 @@ class DataSource(object):
         else:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, executable="/bin/bash")
             output, error = process.communicate()
+            if isinstance(output, bytes):
+                output = output.decode()
+
             if use_cache is True:
                 self.cache.update({cache_key: output})
 
@@ -1339,7 +1510,12 @@ class DataSource(object):
 
     def record_data(self, cmd, output):
         p_output = pickle.dumps(output)
-        # file_name = self.cmd_to_str(cmd)
+
+        if sys.version_info.major == 3:
+            tar_contents = BytesIO(p_output)
+        else:
+            tar_contents = StringIO(p_output)
+
         file_name = cmd
 
         tarinfo = tarfile.TarInfo(file_name)
@@ -1347,7 +1523,7 @@ class DataSource(object):
         tarinfo.mtime = time.time()
 
         tar = tarfile.open(name=self.config.record_tar_file, mode='a')
-        tar.addfile(tarinfo, StringIO.StringIO(p_output))
+        tar.addfile(tarinfo, tar_contents)
         tar.close()
 
     def read_file_if_exists(self, file_to_read):
@@ -1425,7 +1601,6 @@ def extract_string_by_regex(data_string, regex, na_string="=N/A="):
 
 
 def find_in_list(list_to_search_in, regex_pattern):
-    # TBD : refactor to more human readable
     regex = re.compile(regex_pattern)
     result = [m.group(0) for l in list_to_search_in for m in [regex.search(l)] if m]
 
@@ -1434,6 +1609,10 @@ def find_in_list(list_to_search_in, regex_pattern):
     else:
         return ""
 
+def search_in_list_and_extract_by_regex(data_list, search_regex, output_regex):
+    list_search_result = find_in_list(data_list, search_regex)
+    regex_search_result = extract_string_by_regex(list_search_result, output_regex)
+    return str(regex_search_result).strip()
 
 def main():
     if os.geteuid() != 0:
