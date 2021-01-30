@@ -63,9 +63,6 @@ class RegressionConfig(Config):
 
 
 def main(tmp_dir_name, recorder_sys_argv, regression_conf):
-    if os.geteuid() != 0:
-        exit("You need to have root privileges to run this script")
-
     config = regression_conf
 
     # Comes to handle missing TTY during regression
