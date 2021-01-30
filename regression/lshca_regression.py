@@ -1,5 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 
+from __future__ import print_function
 import sys
 import os
 import tempfile
@@ -141,11 +142,13 @@ def regression():
                 recorder_sys_argv = args.parameters[0].split(" ")
                 recorder_sys_argv.insert(0, "lshca_run_by_regression")
             else:
-                f = open(tmp_dir_name + "/cmd", "r")
+                f = open(tmp_dir_name + "/cmd", "rb")
                 recorder_sys_argv = pickle.load(f)
                 recorder_sys_argv = recorder_sys_argv.split(" ")
 
-            stdout = StringIO.StringIO()
+            stdout = StringIO()
+
+            old_stdout = sys.stdout
             sys.stdout = stdout
             trace_back = ""
             try:
@@ -157,20 +160,20 @@ def regression():
                 output = e
                 trace_back = traceback.format_exc()
             finally:
-                sys.stdout = sys.__stdout__
+                sys.stdout = old_stdout
 
-            print '**************************************************************************************'
-            print BColors.BOLD + 'Recorded data file: ' + str(recorded_data_file) + BColors.ENDC
-            print '**************************************************************************************'
+            print('**************************************************************************************')
+            print(BColors.BOLD + 'Recorded data file: ' + str(recorded_data_file) + BColors.ENDC)
+            print('**************************************************************************************')
             try:
                 test_output = output.getvalue()
             except AttributeError:
                 regression_run_succseeded = False
-                print "Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + "\n"
-                print "==>  Traceback   <=="
-                print trace_back
-                print "==>   Error   <=="
-                print output
+                print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + "\n")
+                print("==>  Traceback   <==")
+                print(trace_back)
+                print("==>   Error   <==")
+                print(output)
                 continue
 
             f = open(tmp_dir_name + "/output", "rb")
@@ -183,22 +186,22 @@ def regression():
 
             if test_output != saved_output:
                 regression_run_succseeded = False
-                print "Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + \
-                      " Saved and regression outputs differ\n"
+                print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + \
+                      " Saved and regression outputs differ\n")
 
                 if not args.display_only:
                     d = difflib.Differ()
                     diff = d.compare(saved_output.split("\n"), test_output.split("\n"))
-                    print '\n'.join(diff)
+                    print('\n'.join(diff))
                 elif args.display_only == "orig":
-                    print saved_output
+                    print(saved_output)
                 elif args.display_only == "curr":
-                    print test_output
+                    print(test_output)
             else:
-                print "Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC
+                print("Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC)
                 if args.verbose:
-                    print BColors.OKBLUE + "Test output below:" + BColors.ENDC
-                    print test_output
+                    print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
+                    print(test_output)
 
         if not args.keep_recorded_ds:
             shutil.rmtree(tmp_dir_name)
