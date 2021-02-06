@@ -41,7 +41,8 @@ class Config(object):
                     "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "RoCEstat"],
                     "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
-                              "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"]
+                              "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
+                    "mdev":["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Port", "Net", "VFrepr", "Brdg", "SRIOV", "LnkStat", "IpStat", "PGuid", "MAC" ]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -101,7 +102,7 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'all'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'mdev', 'all'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
@@ -168,6 +169,8 @@ class Config(object):
             self.output_view = "system"
         elif args.view == "cable":
             self.output_view = "cable"
+        elif args.view == "mdev":
+            self.output_view = "mdev"
         elif args.view == "all":
             self.mst_device_enabled = True
             self.sa_smp_query_device_enabled = True
@@ -347,6 +350,7 @@ class HCAManager(object):
                 port_count += 1
 
         self.mlnxHCAs = []
+        mdev_devices = []
         # First handle all PFs
         for bdf_dev in mlnx_bdf_devices:
             rdma_bond_bdf = None
@@ -378,9 +382,18 @@ class HCAManager(object):
                     hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
 
+                # mdev device set per PF
+                if bdf_dev.port == "1":
+                    for mdev in bdf_dev.mdev_list:
+                        mdev_bdf_dev = MlnxMdevDevice(bdf_dev.bdf + '/' + mdev, data_source, self.config)
+                        mdev_bdf_dev.fix_mdev(bdf_dev.bdf)
+
+                        mdev_devices.append(mdev_bdf_dev)
+        mlnx_bdf_devices.extend(mdev_devices)
+
         # Now handle all VFs
         for bdf_dev in mlnx_bdf_devices:
-            if bdf_dev.sriov == 'VF':
+            if bdf_dev.sriov == 'VF' or bdf_dev.sriov == 'MDEV':
                 vf_parent_bdf = bdf_dev.vfParent
 
                 # TBD: refactor to function
@@ -826,8 +839,6 @@ class SYSFSDevice(object):
             self.vfParent = "-"
 
         self.numa = self._data_source.read_file_if_exists(self._sys_prefix + "/numa_node").rstrip()
-        if not self.numa:
-            print("Warning: " + self._bdf + " has no NUMA assignment", file=sys.stderr)
 
         self.rdma = self._data_source.list_dir_if_exists(self._sys_prefix + "/infiniband/").rstrip()
         net_list = self._data_source.list_dir_if_exists(self._sys_prefix + "/net/")
@@ -979,6 +990,13 @@ class SYSFSDevice(object):
         if self.ip_state == "up_noip" and self._config.show_warnings_and_errors is True:
             self.ip_state = self.ip_state + self._config.warning_sign
 
+        mdev_path = "/mdev_supported_types/mlx5_core-local/devices/"
+        self.mdev_list = self._data_source.list_dir_if_exists(self._sys_prefix + mdev_path).split(" ")
+
+        self.mdev_vf_repr = self._data_source.read_file_if_exists(self._sys_prefix +  "/devlink-compat-config/netdev" ).rstrip()
+
+        self.mdev_mac = self._data_source.read_file_if_exists(self._sys_prefix +  "/net/" + self.net + "/address" ).rstrip()
+
         # ========== RoCE view only related variables ==========
         self.gtclass = None
         self.tcp_ecn = None
@@ -1056,6 +1074,38 @@ class MlxCable(object):
         self.cable_length = search_in_list_and_extract_by_regex(data, r'Length +:.*', r'Length +:(.*)').replace(" ", "")
         self.cable_pn = search_in_list_and_extract_by_regex(data, r'Part number +:.*', r'Part number +:(.*)').replace(" ", "")
         self.cable_sn = search_in_list_and_extract_by_regex(data, r'Serial number +:.*', r'Serial number +:(.*)').replace(" ", "")
+
+
+class OVSDevice(object):
+    ovs_cmd_exists = None
+
+    def __init__(self, data_source):
+        self._data_source = data_source
+        self.ovs_parent_bridge = ""
+
+    def get_data(self, net, mdev_vf_repr):
+        if self.ovs_cmd_exists == None:
+            result = self._data_source.exec_shell_cmd("ovs-vsctl --help", use_cache=True)
+            if isinstance(result, list) and len(result) > 0:
+                self.ovs_cmd_exists = True
+            else:
+                self.ovs_cmd_exists = False
+
+        if self.ovs_cmd_exists == False:
+            return
+
+        if net != "":
+            net_bridge = ",".join(self._data_source.exec_shell_cmd("ovs-vsctl port-to-br " + net, use_cache=True))
+        else:
+            net_bridge = ""
+
+        if mdev_vf_repr != "":
+            vf_repr_bridge = ",".join(self._data_source.exec_shell_cmd("ovs-vsctl port-to-br " + mdev_vf_repr, use_cache=True))
+        else:
+            vf_repr_bridge = ""
+
+        if not ( net_bridge == "" and vf_repr_bridge == "" ):
+            self.ovs_parent_bridge = net_bridge + "-" + vf_repr_bridge
 
 
 class MlxLink(object):
@@ -1157,6 +1207,10 @@ class MlnxBDFDevice(object):
         self.bond_master = self.sysFSDevice.bond_master
         self.bond_state = self.sysFSDevice.bond_state
         self.bond_mii_status = self.sysFSDevice.bond_mii_status
+        self.mdev_list = self.sysFSDevice.mdev_list
+        self.mdev_vf_repr = self.sysFSDevice.mdev_vf_repr
+        self.mdev_mac = self.sysFSDevice.mdev_mac
+        self.__sriov = self.sysFSDevice.sriov
 
         self.pciDevice = PCIDevice(self.bdf, data_source, self.config)
         self.pciDevice.get_data()
@@ -1203,6 +1257,11 @@ class MlnxBDFDevice(object):
         self.sw_description = self.sasmpQueryDevice.sw_description
         self.sm_guid = self.sasmpQueryDevice.sm_guid
 
+        self.OVSDevice = OVSDevice(data_source)
+        if self.config.output_view == "mdev" or self.config.output_view == "all":
+            self.OVSDevice.get_data(self.net, self.mdev_vf_repr)
+        self.ovs_parent_bridge = self.OVSDevice.ovs_parent_bridge
+
     def __repr__(self):
         return self.sysFSDevice.__repr__() + "\n" + self.pciDevice.__repr__() + "\n" + \
                 self.mstDevice.__repr__() + "\n"
@@ -1219,9 +1278,13 @@ class MlnxBDFDevice(object):
     def sriov(self):
         if self.config.show_warnings_and_errors is True and self.sysFSDevice.sriov == "PF" and \
                 re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.description):
-            return self.sysFSDevice.sriov + self.config.warning_sign
+            return self.__sriov + self.config.warning_sign
         else:
-            return self.sysFSDevice.sriov
+            return self.__sriov
+
+    @sriov.setter
+    def sriov(self, value):
+        self.__sriov = value
 
     @property
     def roce_status(self):
@@ -1277,8 +1340,10 @@ class MlnxBDFDevice(object):
     def output_info(self):
         if self.sriov in ("PF", "PF" + self.config.warning_sign):
             sriov = self.sriov + "  "
-        else:
+        elif self.sriov in ("VF", "VF" + self.config.warning_sign):
             sriov = "  " + self.sriov
+        else:
+            sriov = self.sriov
         output = {"SRIOV": sriov,
                   "Numa": self.numa,
                   "PCI_addr": self.bdf,
@@ -1310,7 +1375,11 @@ class MlnxBDFDevice(object):
                   "CblPN": self.cable_pn,
                   "CblSN": self.cable_sn,
                   "CblLng": self.cable_length,
-                  "PhyAnalisys": self.physical_link_recommendation}
+                  "PhyAnalisys": self.physical_link_recommendation,
+                  "VFrepr": self.mdev_vf_repr,
+                  "MAC": self.mdev_mac,
+                  "Brdg": self.ovs_parent_bridge,
+                  }
         return output
 
 
@@ -1459,6 +1528,15 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         if bond_speed_missmatch:
             if self.config.show_warnings_and_errors is True:
                 self.port_rate  = self.port_rate + self.config.error_sign
+
+
+class MlnxMdevDevice(MlnxBDFDevice):
+    def fix_mdev(self, pf_bdf):
+        self.vfParent = pf_bdf
+        self.sriov = "MDEV"
+        self.bdf =  ""
+        self.lnkCapWidth =  ""
+        self.lnkStaWidth =  ""
 
 
 class DataSource(object):
