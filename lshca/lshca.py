@@ -358,7 +358,7 @@ class HCAManager(object):
             # Only first slave interface in a bond has infiniband information on his sysfs
             if bdf_dev.bond_master != "=N/A=" and bdf_dev.rdma != "" :
                 rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, self._data_source, self._config)
-                rdma_bond_bdf.fix_rdma_bond(self._data_source)
+                rdma_bond_bdf.get_data()
 
                 bdf_dev.rdma = ""
                 bdf_dev.lnk_state = ""
@@ -1388,7 +1388,12 @@ class MlnxHCA(object):
 
 
 class MlnxRdmaBondDevice(MlnxBDFDevice):
-    def fix_rdma_bond(self, data_source):
+    def get_data(self):
+        #Using python2 super notation for cross version compatability
+        super(MlnxRdmaBondDevice, self).get_data()
+        self._fix_rdma_bond()
+
+    def _fix_rdma_bond(self):
         index = extract_string_by_regex(self.rdma, ".*([0-9]+)$")
         self.bdf = "rdma_bond_" + index
         self.net = self.bond_master
@@ -1405,10 +1410,10 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
 
         sys_prefix = "/sys/devices/virtual/net/" + self.net
 
-        operstate = data_source.read_file_if_exists(sys_prefix + "/operstate").rstrip()
+        operstate = self._data_source.read_file_if_exists(sys_prefix + "/operstate").rstrip()
         if operstate == "up":
             # Implemented via shell cmd to avoid using non default libraries
-            interface_data = data_source.exec_shell_cmd(" ip address show dev %s" % self.net)
+            interface_data = self._data_source.exec_shell_cmd(" ip address show dev %s" % self.net)
             ipv4_data = find_in_list(interface_data, "inet .+")
             ipv6_data = find_in_list(interface_data, "inet6 .+")
             if ipv4_data and ipv6_data:
@@ -1430,9 +1435,9 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         if self.ip_state == "up_noip" and self._config.show_warnings_and_errors is True:
             self.ip_state = self.ip_state + self._config.warning_sign
 
-        mode = data_source.read_file_if_exists(sys_prefix + "/bonding/mode").rstrip()
+        mode = self._data_source.read_file_if_exists(sys_prefix + "/bonding/mode").rstrip()
         mode = mode.split(" ")[0]
-        xmit_hash_policy = data_source.read_file_if_exists(sys_prefix + "/bonding/xmit_hash_policy").rstrip()
+        xmit_hash_policy = self._data_source.read_file_if_exists(sys_prefix + "/bonding/xmit_hash_policy").rstrip()
         xmit_hash_policy = xmit_hash_policy.split(" ")[0]
         xmit_hash_policy = xmit_hash_policy.replace("layer","l")
         xmit_hash_policy = xmit_hash_policy.replace("encap","e")
@@ -1442,11 +1447,11 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
             self.bond_state = self.bond_state + "/" + xmit_hash_policy
 
         # Slaves speed check
-        slaves = data_source.read_file_if_exists(sys_prefix + "/bonding/slaves").rstrip().split(" ")
+        slaves = self._data_source.read_file_if_exists(sys_prefix + "/bonding/slaves").rstrip().split(" ")
         bond_speed = ""
         bond_speed_missmatch = False
         for slave in slaves:
-            slave_speed = data_source.read_file_if_exists(sys_prefix + "/slave_" + slave + "/speed").rstrip()
+            slave_speed = self._data_source.read_file_if_exists(sys_prefix + "/slave_" + slave + "/speed").rstrip()
             if slave_speed:
                 slave_speed = str(int(int(slave_speed)/1000))
             if self.port_rate != slave_speed:
