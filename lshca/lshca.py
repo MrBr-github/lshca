@@ -323,10 +323,14 @@ class Config(object):
 
 class HCAManager(object):
     def __init__(self, data_source, config):
-        self.config = config
+        self._config = config
+        self._data_source = data_source
+        self.mlnxHCAs = []
+
+    def get_data(self):
         mlnx_bdf_list = []
         # Same lspci cmd used in MST source in order to benefit from cache
-        raw_mlnx_bdf_list = data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
+        raw_mlnx_bdf_list = self._data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
         for member in raw_mlnx_bdf_list:
             bdf = extract_string_by_regex(member, "(.+) (Ethernet|Infini[Bb]and|Network)")
 
@@ -338,7 +342,7 @@ class HCAManager(object):
             port_count = 1
 
             while True:
-                bdf_dev = MlnxBDFDevice(bdf, data_source, self.config, port_count)
+                bdf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count)
                 bdf_dev.get_data()
                 mlnx_bdf_devices.append(bdf_dev)
 
@@ -347,20 +351,19 @@ class HCAManager(object):
 
                 port_count += 1
 
-        self.mlnxHCAs = []
         # First handle all PFs
         for bdf_dev in mlnx_bdf_devices:
             rdma_bond_bdf = None
 
             # Only first slave interface in a bond has infiniband information on his sysfs
             if bdf_dev.bond_master != "=N/A=" and bdf_dev.rdma != "" :
-                rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, data_source, self.config)
-                rdma_bond_bdf.fix_rdma_bond(data_source)
+                rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, self._data_source, self._config)
+                rdma_bond_bdf.fix_rdma_bond(self._data_source)
 
                 bdf_dev.rdma = ""
                 bdf_dev.lnk_state = ""
 
-            if bdf_dev.sriov in ("PF", "PF" + self.config.warning_sign):
+            if bdf_dev.sriov in ("PF", "PF" + self._config.warning_sign):
                 hca_found = False
                 for hca in self.mlnxHCAs:
                     if hca.sys_image_guid and bdf_dev.sys_image_guid == hca.sys_image_guid or \
@@ -372,10 +375,10 @@ class HCAManager(object):
 
                 if not hca_found:
                     if rdma_bond_bdf:
-                        hca = MlnxHCA(rdma_bond_bdf, self.config)
+                        hca = MlnxHCA(rdma_bond_bdf, self._config)
                         hca.add_bdf_dev(bdf_dev)
                     else:
-                        hca = MlnxHCA(bdf_dev,  self.config)
+                        hca = MlnxHCA(bdf_dev,  self._config)
                     hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
 
@@ -390,7 +393,7 @@ class HCAManager(object):
                     if vf_parent_bdf == parent_bdf_dev.bdf:
                         parent_found = True
 
-                        hca = self.get_hca_by_sys_image_guid(parent_bdf_dev.sys_image_guid)
+                        hca = self._get_hca_by_sys_image_guid(parent_bdf_dev.sys_image_guid)
                         if hca is not None:
                             hca.add_bdf_dev(bdf_dev)
                         else:
@@ -399,19 +402,19 @@ class HCAManager(object):
                     if parent_found:
                         break
 
-        if self.config.show_warnings_and_errors:
+        if self._config.show_warnings_and_errors:
             for hca in self.mlnxHCAs:
                 hca.check_for_issues()
 
     def display_hcas_info(self):
-        out = Output(self.config)
+        out = Output(self._config)
         for hca in self.mlnxHCAs:
             output_info = hca.output_info()
             out.append(output_info)
 
         out.print_output()
 
-    def get_hca_by_sys_image_guid(self, sys_image_guid):
+    def _get_hca_by_sys_image_guid(self, sys_image_guid):
         for hca in self.mlnxHCAs:
             if sys_image_guid == hca.sys_image_guid:
                 return hca
@@ -1636,6 +1639,7 @@ def main():
     data_source = DataSource(config)
 
     hca_manager = HCAManager(data_source, config)
+    hca_manager.get_data()
 
     hca_manager.display_hcas_info()
 
