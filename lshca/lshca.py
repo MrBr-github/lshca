@@ -722,7 +722,7 @@ class MSTDevice(object):
 
         if mst_installed:
             result = self._data_source.exec_shell_cmd("mst status | grep -c 'MST PCI configuration module loaded'", use_cache=True)
-            if int(result[0]) >= 0:
+            if int(result[0]) == 0:
                 self._data_source.exec_shell_cmd("mst start", use_cache=True)
                 MSTDevice.mst_service_should_be_stopped = True
             self._data_source.exec_shell_cmd("mst cable add", use_cache=True)
