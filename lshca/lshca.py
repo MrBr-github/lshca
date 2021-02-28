@@ -339,6 +339,7 @@ class HCAManager(object):
 
             while True:
                 bdf_dev = MlnxBDFDevice(bdf, data_source, self.config, port_count)
+                bdf_dev.get_data()
                 mlnx_bdf_devices.append(bdf_dev)
 
                 if port_count >= len(bdf_dev.port_list):
@@ -1005,18 +1006,19 @@ class SYSFSDevice(object):
 
 
 class SaSmpQueryDevice(object):
-    def __init__(self, rdma, port, plid, smlid, data_source, config):
+    def __init__(self,  data_source, config):
         self._data_source = data_source
-        self._port = port
-        self._rdma = rdma
-        self._smlid = smlid
         self._config = config
 
         self.sw_guid = ""
         self.sw_description = ""
         self.sm_guid = ""
 
-    def get_data(self):
+    def get_data(self, rdma, port, smlid):
+        self._port = port
+        self._rdma = rdma
+        self._smlid = smlid
+
         if "SMGuid" not in self._config.output_order:
             self._config.output_order.append("SMGuid")
         if "SwGuid" not in self._config.output_order:
@@ -1092,28 +1094,26 @@ class MlxLink(object):
 
 
 class MiscCMDs(object):
-    def __init__(self, net, rdma, data_source, config):
+    def __init__(self, data_source, config):
         self.data_source = data_source
-        self.net = net
-        self.rdma = rdma
         self.config = config
 
-    def get_mlnx_qos_trust(self):
-        data = self.data_source.exec_shell_cmd("mlnx_qos -i " + self.net, use_cache=True)
+    def get_mlnx_qos_trust(self, net):
+        data = self.data_source.exec_shell_cmd("mlnx_qos -i " + net, use_cache=True)
         regex = "Priority trust state: (.*)"
         search_result = find_in_list(data, regex)
         search_result = extract_string_by_regex(search_result, regex)
         return search_result
 
-    def get_mlnx_qos_pfc(self):
-        data = self.data_source.exec_shell_cmd("mlnx_qos -i " + self.net, use_cache=True)
+    def get_mlnx_qos_pfc(self, net):
+        data = self.data_source.exec_shell_cmd("mlnx_qos -i " + net, use_cache=True)
         regex = '^\s+enabled\s+(([0-9]\s+)+)'
         search_result = find_in_list(data, regex)
         search_result = extract_string_by_regex(search_result, regex).replace(" ", "")
         return search_result
 
-    def get_tempr(self):
-        data = self.data_source.exec_shell_cmd("mget_temp -d " + self.rdma, use_cache=True)
+    def get_tempr(self, rdma):
+        data = self.data_source.exec_shell_cmd("mget_temp -d " + rdma, use_cache=True)
         regex = '^([0-9]+)\s+$'
         search_result = find_in_list(data, regex)
         search_result = extract_string_by_regex(search_result, regex).replace(" ", "")
@@ -1130,102 +1130,102 @@ class MiscCMDs(object):
 class MlnxBDFDevice(object):
     def __init__(self, bdf, data_source, config, port=1):
         self.bdf = bdf
-        self.config = config
-        self.slaveBDFDevices = []
+        self._config = config
+        self._data_source = data_source
 
-        self.sysFSDevice = SYSFSDevice(self.bdf, data_source, self.config, port)
-        self.sysFSDevice.get_data()
-        self.fw = self.sysFSDevice.fw
-        self.hca_type = self.sysFSDevice.hca_type
-        self.ib_net_prefix = self.sysFSDevice.ib_net_prefix
-        self.link_layer = self.sysFSDevice.link_layer
-        self.ip_state = self.sysFSDevice.ip_state
-        self.pguid = self.sysFSDevice.pguid
-        self.port = self.sysFSDevice._port
-        self.port_list = self.sysFSDevice.port_list
-        self.port_rate = self.sysFSDevice.port_rate
-        self.plid = self.sysFSDevice.plid
-        self.net = self.sysFSDevice.net
-        self.numa = self.sysFSDevice.numa
-        self.rdma = self.sysFSDevice.rdma
-        self.smlid = self.sysFSDevice.smlid
-        self.lnk_state = self.sysFSDevice.lnk_state
-        self.virt_hca = self.sysFSDevice.virt_hca
-        self.vfParent = self.sysFSDevice.vfParent
-        self.sys_image_guid = self.sysFSDevice.sys_image_guid
-        self.psid = self.sysFSDevice.psid
-        self.bond_master = self.sysFSDevice.bond_master
-        self.bond_state = self.sysFSDevice.bond_state
-        self.bond_mii_status = self.sysFSDevice.bond_mii_status
+        self._sysFSDevice = SYSFSDevice(self.bdf, self._data_source, self._config, port)
+        self._pciDevice = PCIDevice(self.bdf, self._data_source, self._config)
+        self._mstDevice = MSTDevice(self._data_source, self._config)
+        self._mlxLink = MlxLink(self._data_source)
+        self._mlxCable = MlxCable(self._data_source)
+        self._miscDevice = MiscCMDs(self._data_source, self._config)
+        self._sasmpQueryDevice = SaSmpQueryDevice(self._data_source, self._config)
 
-        self.pciDevice = PCIDevice(self.bdf, data_source, self.config)
-        self.pciDevice.get_data()
-        self.description = self.pciDevice.description
-        self.lnkCapWidth = self.pciDevice.lnkCapWidth
-        self.lnkStaWidth = self.pciDevice.lnkStaWidth
+    def get_data(self):
+        # ------ SysFS ------
+        self._sysFSDevice.get_data()
+        self.fw = self._sysFSDevice.fw
+        self.hca_type = self._sysFSDevice.hca_type
+        self.ib_net_prefix = self._sysFSDevice.ib_net_prefix
+        self.link_layer = self._sysFSDevice.link_layer
+        self.ip_state = self._sysFSDevice.ip_state
+        self.pguid = self._sysFSDevice.pguid
+        self.port = self._sysFSDevice._port
+        self.port_list = self._sysFSDevice.port_list
+        self.port_rate = self._sysFSDevice.port_rate
+        self.plid = self._sysFSDevice.plid
+        self.net = self._sysFSDevice.net
+        self.numa = self._sysFSDevice.numa
+        self.rdma = self._sysFSDevice.rdma
+        self.smlid = self._sysFSDevice.smlid
+        self.lnk_state = self._sysFSDevice.lnk_state
+        self.virt_hca = self._sysFSDevice.virt_hca
+        self.vfParent = self._sysFSDevice.vfParent
+        self.sys_image_guid = self._sysFSDevice.sys_image_guid
+        self.psid = self._sysFSDevice.psid
+        self.bond_master = self._sysFSDevice.bond_master
+        self.bond_state = self._sysFSDevice.bond_state
+        self.bond_mii_status = self._sysFSDevice.bond_mii_status
+
+        # ------ PCI ------
+        self._pciDevice.get_data()
+        self.description = self._pciDevice.description
+        self.lnkCapWidth = self._pciDevice.lnkCapWidth
+        self.lnkStaWidth = self._pciDevice.lnkStaWidth
         if self.sriov == "VF":
             self.lnkCapWidth = ""
             self.lnkStaWidth = ""
-        self.pn = self.pciDevice.pn
-        self.sn = self.pciDevice.sn
+        self.pn = self._pciDevice.pn
+        self.sn = self._pciDevice.sn
 
-        self.mstDevice = MSTDevice(data_source, self.config)
-        if self.config.output_view == "cable" or self.config.mst_device_enabled or self.config.output_view == "all":
-            self.mstDevice.init_mst_service()
-            self.mstDevice.get_data(bdf)
-            if "MST_device" not in self.config.output_order:
-                self.config.output_order.append("MST_device")
-        self.mst_device = self.mstDevice.mst_device
-        self.mst_cable = self.mstDevice.mst_cable
+        # ------ MST ------
+        if self._config.output_view == "cable" or self._config.mst_device_enabled or self._config.output_view == "all":
+            self._mstDevice.init_mst_service()
+            self._mstDevice.get_data(self.bdf)
+            if "MST_device" not in self._config.output_order:
+                self._config.output_order.append("MST_device")
+        self.mst_device = self._mstDevice.mst_device
+        self.mst_cable = self._mstDevice.mst_cable
 
-        self.mlxLink = MlxLink(data_source)
-        if self.config.output_view == "cable" or self.config.output_view == "all":
-            self.mlxLink.get_data(self.mst_device, self.port)
-        self.physical_link_speed = self.mlxLink.physical_link_speed
-        self.physical_link_status = self.mlxLink.physical_link_status
-        self.physical_link_recommendation = self.mlxLink.physical_link_recommendation
+        # ------ MLX link ------
+        if self._config.output_view == "cable" or self._config.output_view == "all":
+            self._mlxLink.get_data(self.mst_device, self.port)
+        self.physical_link_speed = self._mlxLink.physical_link_speed
+        self.physical_link_status = self._mlxLink.physical_link_status
+        self.physical_link_recommendation = self._mlxLink.physical_link_recommendation
 
-        self.mlxCable = MlxCable(data_source)
-        if self.config.output_view == "cable" or self.config.output_view == "all":
-            self.mlxCable.get_data(self.mst_cable)
-        self.cable_length = self.mlxCable.cable_length
-        self.cable_pn = self.mlxCable.cable_pn
-        self.cable_sn = self.mlxCable.cable_sn
+        # ------ MLX Cable ------
+        if self._config.output_view == "cable" or self._config.output_view == "all":
+            self._mlxCable.get_data(self.mst_cable)
+        self.cable_length = self._mlxCable.cable_length
+        self.cable_pn = self._mlxCable.cable_pn
+        self.cable_sn = self._mlxCable.cable_sn
 
-        self.miscDevice = MiscCMDs(self.net, self.rdma, data_source, self.config)
-        self.tempr = self.miscDevice.get_tempr()
+        # ------ Misc ------
+        self.tempr = self._miscDevice.get_tempr(self.rdma)
 
-        self.sasmpQueryDevice = SaSmpQueryDevice(self.rdma, self.port, self.plid, self.smlid,
-                                                 data_source, self.config)
-        if self.config.sa_smp_query_device_enabled:
-            self.sasmpQueryDevice.get_data()
-        self.sw_guid = self.sasmpQueryDevice.sw_guid
-        self.sw_description = self.sasmpQueryDevice.sw_description
-        self.sm_guid = self.sasmpQueryDevice.sm_guid
+        # ------ SA/SMP query ------
+        if self._config.sa_smp_query_device_enabled:
+            self._sasmpQueryDevice.get_data(self.rdma, self.port, self.smlid)
+        self.sw_guid = self._sasmpQueryDevice.sw_guid
+        self.sw_description = self._sasmpQueryDevice.sw_description
+        self.sm_guid = self._sasmpQueryDevice.sm_guid
 
     def __repr__(self):
-        return self.sysFSDevice.__repr__() + "\n" + self.pciDevice.__repr__() + "\n" + \
-                self.mstDevice.__repr__() + "\n"
-
-    # Not in use, consider removal
-    def add_slave_bdf_device(self, slave_bdf_device):
-        self.slaveBDFDevices.append(slave_bdf_device)
-
-    # Not in use, consider removal
-    def get_slave_bdf_devices(self):
-        return self.slaveBDFDevices
+        return self._sysFSDevice.__repr__() + "\n" + self._pciDevice.__repr__() + "\n" + \
+                self._mstDevice.__repr__() + "\n"
 
     @property
     def sriov(self):
-        if self.config.show_warnings_and_errors is True and self.sysFSDevice.sriov == "PF" and \
-                re.match(r".*[Vv]irtual [Ff]unction.*", self.pciDevice.description):
-            return self.sysFSDevice.sriov + self.config.warning_sign
+        if self._config.show_warnings_and_errors is True and self._sysFSDevice.sriov == "PF" and \
+                re.match(r".*[Vv]irtual [Ff]unction.*", self._pciDevice.description):
+            return self._sysFSDevice.sriov + self._config.warning_sign
         else:
-            return self.sysFSDevice.sriov
+            return self._sysFSDevice.sriov
 
     @property
     def roce_status(self):
-        if self.link_layer == "IB" or not ( self.config.output_view == "roce" or self.config.output_view == "all"):
+        if self.link_layer == "IB" or not ( self._config.output_view == "roce" or self._config.output_view == "all"):
             return "N/A"
         
         lossy_status_bitmap_str = ""
@@ -1234,31 +1234,31 @@ class MlnxBDFDevice(object):
         if self.bond_master != "=N/A=" and self.bond_master != "":
             bond_slave = True
 
-        if self.miscDevice.get_mlnx_qos_trust() == self.config.lossless_roce_expected_trust:
+        if self._miscDevice.get_mlnx_qos_trust(self.net) == self._config.lossless_roce_expected_trust:
             lossy_status_bitmap_str += "1"
         else:
             lossy_status_bitmap_str += "0"
 
-        if self.miscDevice.get_mlnx_qos_pfc() == self.config.lossless_roce_expected_pfc:
-            lossy_status_bitmap_str += "1"
-        else:
-            lossy_status_bitmap_str += "0"
-
-        if bond_slave:
-            lossy_status_bitmap_str += "_"
-        elif self.sysFSDevice.gtclass == self.config.lossless_roce_expected_gtclass:
-            lossy_status_bitmap_str += "1"
-        else:
-            lossy_status_bitmap_str += "0"
-
-        if self.sysFSDevice.tcp_ecn == self.config.lossless_roce_expected_tcp_ecn:
+        if self._miscDevice.get_mlnx_qos_pfc(self.net) == self._config.lossless_roce_expected_pfc:
             lossy_status_bitmap_str += "1"
         else:
             lossy_status_bitmap_str += "0"
 
         if bond_slave:
             lossy_status_bitmap_str += "_"
-        elif self.sysFSDevice.rdma_cm_tos == self.config.lossless_roce_expected_rdma_cm_tos:
+        elif self._sysFSDevice.gtclass == self._config.lossless_roce_expected_gtclass:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if self._sysFSDevice.tcp_ecn == self._config.lossless_roce_expected_tcp_ecn:
+            lossy_status_bitmap_str += "1"
+        else:
+            lossy_status_bitmap_str += "0"
+
+        if bond_slave:
+            lossy_status_bitmap_str += "_"
+        elif self._sysFSDevice.rdma_cm_tos == self._config.lossless_roce_expected_rdma_cm_tos:
             lossy_status_bitmap_str += "1"
         else:
             lossy_status_bitmap_str += "0"
@@ -1269,13 +1269,13 @@ class MlnxBDFDevice(object):
             retval = "Lossy"
         else:
             retval = "Lossy:" + lossy_status_bitmap_str
-            if self.config.show_warnings_and_errors is True:
-                return retval + self.config.warning_sign
+            if self._config.show_warnings_and_errors is True:
+                return retval + self._config.warning_sign
 
         return retval
 
     def output_info(self):
-        if self.sriov in ("PF", "PF" + self.config.warning_sign):
+        if self.sriov in ("PF", "PF" + self._config.warning_sign):
             sriov = self.sriov + "  "
         else:
             sriov = "  " + self.sriov
@@ -1422,10 +1422,10 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
             self.ip_state = "down"
 
         if self.ip_state == "down" and self.lnk_state == "actv" \
-                and self.config.show_warnings_and_errors is True:
-            self.ip_state = self.ip_state + self.config.error_sign
-        if self.ip_state == "up_noip" and self.config.show_warnings_and_errors is True:
-            self.ip_state = self.ip_state + self.config.warning_sign
+                and self._config.show_warnings_and_errors is True:
+            self.ip_state = self.ip_state + self._config.error_sign
+        if self.ip_state == "up_noip" and self._config.show_warnings_and_errors is True:
+            self.ip_state = self.ip_state + self._config.warning_sign
 
         mode = data_source.read_file_if_exists(sys_prefix + "/bonding/mode").rstrip()
         mode = mode.split(" ")[0]
@@ -1457,8 +1457,8 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.port_rate = bond_speed
 
         if bond_speed_missmatch:
-            if self.config.show_warnings_and_errors is True:
-                self.port_rate  = self.port_rate + self.config.error_sign
+            if self._config.show_warnings_and_errors is True:
+                self.port_rate  = self.port_rate + self._config.error_sign
 
 
 class DataSource(object):
