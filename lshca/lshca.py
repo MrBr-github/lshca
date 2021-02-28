@@ -1225,7 +1225,7 @@ class MlnxBDFDevice(object):
 
     @property
     def roce_status(self):
-        if self.link_layer == "IB" or self.config.output_view != "roce":
+        if self.link_layer == "IB" or not ( self.config.output_view == "roce" or self.config.output_view == "all"):
             return "N/A"
         
         lossy_status_bitmap_str = ""
