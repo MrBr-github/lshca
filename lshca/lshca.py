@@ -8,6 +8,7 @@
 # Project repo: https://github.com/MrBr-github/lshca
 # License: This utility provided under GNU GPLv3 license
 
+from __future__ import division
 from __future__ import print_function
 import os
 import pickle
@@ -20,6 +21,8 @@ import time
 import json
 import argparse
 import textwrap
+import hashlib
+
 
 try:
     from StringIO import StringIO # for Python 2
@@ -41,7 +44,8 @@ class Config(object):
                     "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "RoCEstat"],
                     "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
-                              "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"]
+                              "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
+                    "traff": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "TraffTX", "TraffRX"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -82,7 +86,7 @@ class Config(object):
                          Example: speed of disabled port might be 10G, where the actual port speed is 100G
                          ''' + self.error_sign + '''  == Error.
                          Example: HCA requires x16 PCI lanes, but only x8 available in the slot
-                         
+
                      examples:
                          lshca -j -s mst -o \"-SN\"
                          lshca -o \"Dev,Port,Net,PN,Desc,RDMA\" -ow \"RDMA=mlx5_[48]\"
@@ -101,7 +105,7 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'all'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'traff', 'all'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
@@ -109,6 +113,7 @@ class Config(object):
                               roce   - Show RoCE oriented HCA info"
                               cable  - Show cable and physical link HCA info. Based on mlxcable and mlxlink utils.
                                        Note: It takes time to display this view due to underling utils execution time.
+                              traff  - Show port traffic
                               all    - Show all available HCA info. Aggregates all above views + MST data source.
                               Note: all human readable output views are elastic. See extended help for more info.
                             ''')
@@ -168,6 +173,8 @@ class Config(object):
             self.output_view = "system"
         elif args.view == "cable":
             self.output_view = "cable"
+        elif args.view == "traff":
+            self.output_view = "traff"
         elif args.view == "all":
             self.mst_device_enabled = True
             self.sa_smp_query_device_enabled = True
@@ -240,7 +247,7 @@ class Config(object):
           RDMA      - Channel Adapter name (ca_name)
           LnkStat   - Port state as provided by driver. Possible values:
                                State/Physical State
-                        actv - active/linkup 
+                        actv - active/linkup
                         init - initializing/linkup
                         poll - down/polling
                         down - down/disabled
@@ -302,6 +309,9 @@ class Config(object):
                                    ││└─── gtclass - expected \"""" + self.lossless_roce_expected_gtclass + """\"
                                    │└──── pfc - expected \"""" + self.lossless_roce_expected_pfc + """\"
                                    └───── trust - expected \"""" + self.lossless_roce_expected_trust + """\"
+        Traff view
+         TraffTX - Transmitted traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit
+         TraffRX - Recieved traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit
 
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
@@ -1007,6 +1017,59 @@ class SYSFSDevice(object):
             except OSError:
                 self.rdma_cm_tos = "Failed to retrieve"
 
+        self.traff_tx_bitps = "N/A"
+        self.traff_rx_bitps = "N/A"
+
+    def get_traffic(self):
+        # see https://community.mellanox.com/s/article/understanding-mlx5-linux-counters-and-status-parameters for more info about the counteres
+        if self.lnk_state == "down":
+            return
+
+        # record suffix var used as a hack during lshca data recording , this creates 2 different paths that will be recorder seperately
+        record_suffix = "__1"
+
+        try:
+            self._prev_tx_bit = self._curr_tx_bit
+        except AttributeError:
+            record_suffix = "__2"
+
+        try:
+            self._prev_rx_bit = self._curr_rx_bit
+        except AttributeError:
+            pass
+
+        try:
+            self._prev_timestamp = self._curr_timestamp
+        except AttributeError:
+            pass
+
+        self._curr_tx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
+                                                                     self._port + "/counters/port_rcv_data", record_suffix)
+        if self._curr_tx_bit:
+            self._curr_tx_bit = int(self._curr_tx_bit) * 8 * 4
+        else:
+            self._curr_tx_bit = 0
+
+        self._curr_rx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
+                                                                     self._port + "/counters/port_xmit_data", record_suffix)
+        if self._curr_rx_bit:
+            self._curr_rx_bit = int(self._curr_rx_bit) * 8 * 4
+        else:
+            self._curr_rx_bit = 0
+
+        # Using this to record data if requested
+        self._curr_timestamp = self._data_source.exec_python_code("time.time()", record_suffix)
+
+        try:
+            # not handling counter rollover, this is too reare case
+            self.traff_tx_bitps = (self._curr_tx_bit - self._prev_tx_bit) / (self._curr_timestamp - self._prev_timestamp)
+            self.traff_tx_bitps = humanize_number(self.traff_tx_bitps)
+
+            self.traff_rx_bitps = (self._curr_rx_bit - self._prev_rx_bit) / (self._curr_timestamp - self._prev_timestamp)
+            self.traff_rx_bitps = humanize_number(self.traff_rx_bitps)
+        except AttributeError:
+            pass
+
 
 class SaSmpQueryDevice(object):
     def __init__(self,  data_source, config):
@@ -1169,6 +1232,10 @@ class MlnxBDFDevice(object):
         self.bond_master = self._sysFSDevice.bond_master
         self.bond_state = self._sysFSDevice.bond_state
         self.bond_mii_status = self._sysFSDevice.bond_mii_status
+        if self._config.output_view == "traff" or self._config.output_view == "all":
+            self._sysFSDevice.get_traffic()
+        self.traff_tx_bitps = self._sysFSDevice.traff_tx_bitps
+        self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
 
         # ------ PCI ------
         self._pciDevice.get_data()
@@ -1213,6 +1280,13 @@ class MlnxBDFDevice(object):
         self.sw_guid = self._sasmpQueryDevice.sw_guid
         self.sw_description = self._sasmpQueryDevice.sw_description
         self.sm_guid = self._sasmpQueryDevice.sm_guid
+
+        if self._config.output_view == "traff" or self._config.output_view == "all":
+        # If traffic requested, get the reading for the second time.
+        # Doing it at the end of function for some time to passs between 2 readings
+            self._sysFSDevice.get_traffic()
+            self.traff_tx_bitps = self._sysFSDevice.traff_tx_bitps
+            self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
 
     def __repr__(self):
         return self._sysFSDevice.__repr__() + "\n" + self._pciDevice.__repr__() + "\n" + \
@@ -1281,6 +1355,11 @@ class MlnxBDFDevice(object):
 
         return retval
 
+    def get_traff(self):
+        self.sysFSDevice.get_traffic()
+        self.traff_tx_bitps = self.sysFSDevice.traff_tx_bitps
+        self.traff_rx_bitps = self.sysFSDevice.traff_rx_bitps
+
     def output_info(self):
         if self.sriov in ("PF", "PF" + self._config.warning_sign):
             sriov = self.sriov + "  "
@@ -1317,7 +1396,10 @@ class MlnxBDFDevice(object):
                   "CblPN": self.cable_pn,
                   "CblSN": self.cable_sn,
                   "CblLng": self.cable_length,
-                  "PhyAnalisys": self.physical_link_recommendation}
+                  "PhyAnalisys": self.physical_link_recommendation,
+                  "TraffTX": self.traff_tx_bitps,
+                  "TraffRX": self.traff_rx_bitps
+                  }
         return output
 
 
@@ -1550,7 +1632,7 @@ class DataSource(object):
         tar.addfile(tarinfo, tar_contents)
         tar.close()
 
-    def read_file_if_exists(self, file_to_read):
+    def read_file_if_exists(self, file_to_read, record_suffix=""):
         if os.path.exists(file_to_read):
             f = open(file_to_read, "r")
             output = f.read()
@@ -1559,7 +1641,7 @@ class DataSource(object):
             output = ""
 
         if self.config.record_data_for_debug is True:
-            cmd = "os.path.exists" + file_to_read
+            cmd = "os.path.exists" + file_to_read + record_suffix
             self.record_data(cmd, output)
 
         return output
@@ -1593,6 +1675,15 @@ class DataSource(object):
 
         if self.config.record_data_for_debug is True:
             cmd = "os.listdir" + dir_to_list.rstrip('/') + "_dir"
+            self.record_data(cmd, output)
+
+        return output
+
+    def exec_python_code(self, python_code, record_suffix=""):
+        output = eval(python_code)
+
+        if self.config.record_data_for_debug is True:
+            cmd = "os.python.code/" + hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix
             self.record_data(cmd, output)
 
         return output
@@ -1637,6 +1728,22 @@ def search_in_list_and_extract_by_regex(data_list, search_regex, output_regex):
     list_search_result = find_in_list(data_list, search_regex)
     regex_search_result = extract_string_by_regex(list_search_result, output_regex)
     return str(regex_search_result).strip()
+
+def humanize_number(num, precision=1):
+    abbrevs = (
+        (10 ** 15, 'P'),
+        (10 ** 12, 'T'),
+        (10 ** 9, 'G'),
+        (10 ** 6, 'M'),
+        (10 ** 3, 'K'),
+        (1, '')
+    )
+    if num == 1:
+        return '1'
+    for factor, suffix in abbrevs:
+        if num >= factor:
+            break
+    return '%.*f%s' % (precision, num / factor, suffix)
 
 def main():
     if os.geteuid() != 0:
