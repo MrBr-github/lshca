@@ -1230,19 +1230,23 @@ class MlnxBDFDevice(object):
     def roce_status(self):
         if self.link_layer == "IB" or not ( self._config.output_view == "roce" or self._config.output_view == "all"):
             return "N/A"
-        
+
         lossy_status_bitmap_str = ""
 
         bond_slave = False
         if self.bond_master != "=N/A=" and self.bond_master != "":
             bond_slave = True
 
-        if self._miscDevice.get_mlnx_qos_trust(self.net) == self._config.lossless_roce_expected_trust:
+        if type(self) != MlnxBDFDevice:
+            lossy_status_bitmap_str += "_"
+        elif self._miscDevice.get_mlnx_qos_trust(self.net) == self._config.lossless_roce_expected_trust:
             lossy_status_bitmap_str += "1"
         else:
             lossy_status_bitmap_str += "0"
 
-        if self._miscDevice.get_mlnx_qos_pfc(self.net) == self._config.lossless_roce_expected_pfc:
+        if type(self) != MlnxBDFDevice:
+            lossy_status_bitmap_str += "_"
+        elif self._miscDevice.get_mlnx_qos_pfc(self.net) == self._config.lossless_roce_expected_pfc:
             lossy_status_bitmap_str += "1"
         else:
             lossy_status_bitmap_str += "0"
