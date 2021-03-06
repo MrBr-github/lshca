@@ -45,7 +45,7 @@ class Config(object):
                              "IpStat", "RoCEstat"],
                     "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
                               "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
-                    "traff": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "TraffTX", "TraffRX"]
+                    "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "TX_bps", "RX_bps"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -105,7 +105,7 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'traff', 'all'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'traffic', 'all'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system - (default). Show system oriented HCA info
@@ -113,7 +113,7 @@ class Config(object):
                               roce   - Show RoCE oriented HCA info"
                               cable  - Show cable and physical link HCA info. Based on mlxcable and mlxlink utils.
                                        Note: It takes time to display this view due to underling utils execution time.
-                              traff  - Show port traffic
+                              traffic  - Show port traffic
                               all    - Show all available HCA info. Aggregates all above views + MST data source.
                               Note: all human readable output views are elastic. See extended help for more info.
                             ''')
@@ -173,8 +173,8 @@ class Config(object):
             self.output_view = "system"
         elif args.view == "cable":
             self.output_view = "cable"
-        elif args.view == "traff":
-            self.output_view = "traff"
+        elif args.view == "traffic":
+            self.output_view = "traffic"
         elif args.view == "all":
             self.mst_device_enabled = True
             self.sa_smp_query_device_enabled = True
@@ -309,9 +309,10 @@ class Config(object):
                                    ││└─── gtclass - expected \"""" + self.lossless_roce_expected_gtclass + """\"
                                    │└──── pfc - expected \"""" + self.lossless_roce_expected_pfc + """\"
                                    └───── trust - expected \"""" + self.lossless_roce_expected_trust + """\"
-        Traff view
-         TraffTX - Transmitted traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit
-         TraffRX - Recieved traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit
+
+         Traffic view
+          TX_bps - Transmitted traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit. Based on port_rcv_data counter
+          RX_bps - Recieved traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit. Based on port_xmit_data counter
 
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
@@ -1030,18 +1031,10 @@ class SYSFSDevice(object):
 
         try:
             self._prev_tx_bit = self._curr_tx_bit
-        except AttributeError:
-            record_suffix = "__2"
-
-        try:
             self._prev_rx_bit = self._curr_rx_bit
-        except AttributeError:
-            pass
-
-        try:
             self._prev_timestamp = self._curr_timestamp
         except AttributeError:
-            pass
+            record_suffix = "__2"
 
         self._curr_tx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
                                                                      self._port + "/counters/port_rcv_data", record_suffix)
@@ -1232,7 +1225,7 @@ class MlnxBDFDevice(object):
         self.bond_master = self._sysFSDevice.bond_master
         self.bond_state = self._sysFSDevice.bond_state
         self.bond_mii_status = self._sysFSDevice.bond_mii_status
-        if self._config.output_view == "traff" or self._config.output_view == "all":
+        if self._config.output_view == "traffic" or self._config.output_view == "all":
             self._sysFSDevice.get_traffic()
         self.traff_tx_bitps = self._sysFSDevice.traff_tx_bitps
         self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
@@ -1281,9 +1274,9 @@ class MlnxBDFDevice(object):
         self.sw_description = self._sasmpQueryDevice.sw_description
         self.sm_guid = self._sasmpQueryDevice.sm_guid
 
-        if self._config.output_view == "traff" or self._config.output_view == "all":
+        if self._config.output_view == "traffic" or self._config.output_view == "all":
         # If traffic requested, get the reading for the second time.
-        # Doing it at the end of function for some time to passs between 2 readings
+        # Doing it at the end of the function lets some time to passs between 2 readings
             self._sysFSDevice.get_traffic()
             self.traff_tx_bitps = self._sysFSDevice.traff_tx_bitps
             self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
@@ -1397,8 +1390,8 @@ class MlnxBDFDevice(object):
                   "CblSN": self.cable_sn,
                   "CblLng": self.cable_length,
                   "PhyAnalisys": self.physical_link_recommendation,
-                  "TraffTX": self.traff_tx_bitps,
-                  "TraffRX": self.traff_rx_bitps
+                  "TX_bps": self.traff_tx_bitps,
+                  "RX_bps": self.traff_rx_bitps
                   }
         return output
 
