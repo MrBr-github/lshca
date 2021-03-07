@@ -45,7 +45,7 @@ class DataSourceRecorded(DataSource):
         return output
 
     def exec_python_code(self, python_code, record_suffix=""):
-        output = self.read_cmd_output_from_file("/os.python.code/" + hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix)
+        output = self.read_cmd_output_from_file("/os.python.code/", hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix)
         return output
 
 
