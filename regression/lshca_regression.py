@@ -83,6 +83,8 @@ def main(tmp_dir_name, recorder_sys_argv, regression_conf):
 
 
 def regression():
+    rec_data_dir_path = os.path.dirname(os.path.abspath(__file__)) + "/../recorded_data/"
+
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
     parser.add_argument('--skip-missing', action='store_true', dest="skip_missing",
@@ -113,20 +115,20 @@ def regression():
     args = parser.parse_args(cust_user_args)
 
     if args.data_source:
-        if os.path.isfile("recorded_data/" + str(args.data_source[0])):
+        if os.path.isfile(rec_data_dir_path + str(args.data_source[0])):
             recorded_data_files_list = [str(args.data_source[0])]
         else:
             print("No such data source \"" + str(args.data_source[0]) + "\"")
             sys.exit(1)
     else:
-        recorded_data_files_list = os.listdir("recorded_data")
+        recorded_data_files_list = os.listdir(rec_data_dir_path)
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
 
     if len(recorded_data_files_list) != 0:
         for recorded_data_file in recorded_data_files_list:
 
-            shutil.copyfile("recorded_data/" + recorded_data_file, tmp_dir_name + "/" + recorded_data_file)
+            shutil.copyfile(rec_data_dir_path + recorded_data_file, tmp_dir_name + "/" + recorded_data_file)
 
             tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
             tar.extractall(path=tmp_dir_name)
