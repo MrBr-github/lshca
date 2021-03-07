@@ -1434,6 +1434,7 @@ class MlnxHCA(object):
             for i, bdf_dev in enumerate(self.bdf_devices):
                 if bdf_dev.bdf == new_bdf_dev.vfParent:
                     self.bdf_devices.insert(i + 1, new_bdf_dev)
+                    break
         else:
             self.bdf_devices.append(new_bdf_dev)
 
