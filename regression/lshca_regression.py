@@ -77,6 +77,7 @@ def main(tmp_dir_name, recorder_sys_argv, regression_conf):
     data_source = DataSourceRecorded(config)
 
     hca_manager = HCAManager(data_source, config)
+    hca_manager.get_data()
 
     hca_manager.display_hcas_info()
 
@@ -157,7 +158,7 @@ def regression():
                 regression_conf.skip_missing = args.skip_missing
                 main(tmp_dir_name, recorder_sys_argv, regression_conf)
                 output = stdout
-            except Exception as e:
+            except BaseException as e:
                 output = e
                 trace_back = traceback.format_exc()
             finally:
@@ -165,12 +166,14 @@ def regression():
 
             print('**************************************************************************************')
             print(BColors.BOLD + 'Recorded data file: ' + str(recorded_data_file) + BColors.ENDC)
+            print("Command: " + " ".join(recorder_sys_argv))
             print('**************************************************************************************')
             try:
                 test_output = output.getvalue()
             except AttributeError:
                 regression_run_succseeded = False
                 print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + "\n")
+                print(recorder_sys_argv)
                 print("==>  Traceback   <==")
                 print(trace_back)
                 print("==>   Error   <==")
@@ -203,6 +206,7 @@ def regression():
                 if args.verbose:
                     print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
                     print(test_output)
+            print("\n")
 
         if not args.keep_recorded_ds:
             shutil.rmtree(tmp_dir_name)
