@@ -1629,7 +1629,11 @@ class DataSource(object):
     def read_file_if_exists(self, file_to_read, record_suffix=""):
         if os.path.exists(file_to_read):
             f = open(file_to_read, "r")
-            output = f.read()
+            try:
+                output = f.read()
+            except IOError as exception:
+                print("Error: failed to read {}".format(file_to_read), file=sys.stderr)
+                output = ""
             f.close()
         else:
             output = ""
