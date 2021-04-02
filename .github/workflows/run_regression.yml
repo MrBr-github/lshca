@@ -1,0 +1,30 @@
+---
+name: lshca-regression
+on: [push, workflow_dispatch]
+jobs:
+  run-regression:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [2.7, 3.6]
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Checkout lshca regression data
+        uses: actions/checkout@v2
+        with:
+          repository: MrBr-github/lshca
+
+      - name: Checkout lshca regression data
+        uses: actions/checkout@v2
+        with:
+          repository: MrBr-github/lshca_regression_data
+          path: recorded_data
+        
+      - name: Install dependencies
+        run: |
+          rm -rf recorded_data/.git
+          python regression/lshca_regression.py
