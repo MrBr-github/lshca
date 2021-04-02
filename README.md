@@ -1,3 +1,5 @@
+![regression](https://github.com/MrBr-github/lshca/actions/workflows/run_regression.yml/badge.svg)
+
 # LSHCA
 This utility comes to provide bird's-eye view of HCAs installed.<br>
 Other utilities can show deeper/better information in their small area, but LSHCA shows comprehensive information from many sources.<br>
