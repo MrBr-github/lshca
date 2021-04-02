@@ -24,7 +24,7 @@ jobs:
           repository: MrBr-github/lshca_regression_data
           path: recorded_data
         
-      - name: Install dependencies
+      - name: Run regression tests
         run: |
           rm -rf recorded_data/.git
           python regression/lshca_regression.py
