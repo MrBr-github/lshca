@@ -127,6 +127,8 @@ def regression():
 
     if len(recorded_data_files_list) != 0:
         for recorded_data_file in recorded_data_files_list:
+            if not os.path.isfile(rec_data_dir_path + recorded_data_file):
+                continue
 
             shutil.copyfile(rec_data_dir_path + recorded_data_file, tmp_dir_name + "/" + recorded_data_file)
 
