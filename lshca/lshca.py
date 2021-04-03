@@ -1026,15 +1026,14 @@ class SYSFSDevice(object):
         if self.lnk_state == "down":
             return
 
-        # record suffix var used as a hack during lshca data recording , this creates 2 different paths that will be recorder seperately
-        record_suffix = "__1"
-
         try:
             self._prev_tx_bit = self._curr_tx_bit
             self._prev_rx_bit = self._curr_rx_bit
             self._prev_timestamp = self._curr_timestamp
-        except AttributeError:
+            # record suffix var used as a hack during lshca data recording , this creates 2 different paths that will be recorder seperately
             record_suffix = "__2"
+        except AttributeError:
+            record_suffix = "__1"
 
         self._curr_tx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
                                                                      self._port + "/counters/port_rcv_data", record_suffix)
