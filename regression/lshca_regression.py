@@ -138,19 +138,19 @@ def regression():
             if args.display_recorded_fields:
                 try:
                     f = open(tmp_dir_name + "/output_fields", "r")
-                    recorder_sys_argv = pickle.load(f)
+                    recorded_sys_args = pickle.load(f)
                 except:
                     print("Error: No output fileds saved")
                     sys.exit(1)
-                recorder_sys_argv.insert(0, "-o")
-                recorder_sys_argv.insert(0, "lshca_run_by_regression")
+                recorded_sys_args.insert(0, "-o")
+                recorded_sys_args.insert(0, "lshca_run_by_regression")
             elif args.parameters:
-                recorder_sys_argv = args.parameters[0].split(" ")
-                recorder_sys_argv.insert(0, "lshca_run_by_regression")
+                recorded_sys_args = args.parameters[0].split(" ")
+                recorded_sys_args.insert(0, "lshca_run_by_regression")
             else:
                 f = open(tmp_dir_name + "/cmd", "rb")
-                recorder_sys_argv = pickle.load(f)
-                recorder_sys_argv = recorder_sys_argv.split(" ")
+                recorded_sys_args = pickle.load(f)
+                recorded_sys_args = recorded_sys_args.split(" ")
 
             stdout = StringIO()
 
@@ -160,7 +160,7 @@ def regression():
             try:
                 regression_conf = RegressionConfig()
                 regression_conf.skip_missing = args.skip_missing
-                main(tmp_dir_name, recorder_sys_argv, regression_conf)
+                main(tmp_dir_name, recorded_sys_args, regression_conf)
                 output = stdout
             except BaseException as e:
                 output = e
@@ -170,14 +170,14 @@ def regression():
 
             print('**************************************************************************************')
             print(BColors.BOLD + 'Recorded data file: ' + str(recorded_data_file) + BColors.ENDC)
-            print("Command: " + " ".join(recorder_sys_argv))
+            print("Command: " + " ".join(recorded_sys_args))
             print('**************************************************************************************')
             try:
                 test_output = output.getvalue()
             except AttributeError:
                 regression_run_succseeded = False
                 print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + "\n")
-                print(recorder_sys_argv)
+                print(recorded_sys_args)
                 print("==>  Traceback   <==")
                 print(trace_back)
                 print("==>   Error   <==")
