@@ -1067,7 +1067,7 @@ class SYSFSDevice(object):
 
             self.traff_rx_bitps = (self._curr_rx_bit - self._prev_rx_bit) / (self._curr_timestamp - self._prev_timestamp)
             self.traff_rx_bitps = humanize_number(self.traff_rx_bitps)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
 
 
