@@ -1,27 +1,27 @@
+![regression](https://github.com/MrBr-github/lshca/actions/workflows/run_regression.yml/badge.svg)
+
 # LSHCA
 This utility comes to provide bird's-eye view of HCAs installed.<br>
+Other utilities can show deeper/better information in their small area, but LSHCA shows comprehensive information from many sources.<br>
 It's mainly intended for system administrators, thus defaults configured accordingly.
 
 # Main features
 * Supported HCA features
-  * Socket Direct HCA 
+  * Socket Direct HCA
   * Bond
   * SRIOV
-* Elastic view - comes to reduce excessive information in human readable output
-* Protocol oriented view: IB, RoCE
+* Elastic output - comes to reduce excessive information in human readable output
+* Protocol/feature oriented views: IB, RoCE, Cable, Traffic
 * Machine readable output: JSON
+* Doesn't requires 3rd party libraries
+* Supports Python 2.7 and 3.x
 
 # Limitations
  * requires root, this comes from lspci limitation to provide full information to non-root users
 
-# Future development
-* Make utility available as a library
-* Python3 support
-* YAML output
-
 # Examples
 ## System view
-ConnectX6 socket direct 200G and ConnectX5 100G HCAs. 
+ConnectX6 socket direct 200G and ConnectX5 100G HCAs.
 <pre><code>---------------------------------------------------------------------------------------------------
 Dev #1
  Desc: Mellanox Technologies MT28908 Family [ConnectX-6]
@@ -68,3 +68,6 @@ mlx5_0 | ib0 |  0   | up_ip4  |  Phys  |  22  | b8599f0300d1f222 | fe80000000000
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
 </code></pre>
 
+
+
+For more information about LSHCA see [wiki](https://github.com/MrBr-github/lshca/wiki) and extended help `lshca -hh`

@@ -32,8 +32,8 @@ class DataSourceRecorded(DataSource):
         output = self.read_cmd_output_from_file("/shell.cmd/", cmd)
         return output
 
-    def read_file_if_exists(self, file_to_read):
-        output = self.read_cmd_output_from_file("/os.path.exists/", file_to_read)
+    def read_file_if_exists(self, file_to_read, record_suffix=""):
+        output = self.read_cmd_output_from_file("/os.path.exists/", file_to_read + record_suffix)
         return output
 
     def read_link_if_exists(self, link_to_read):
@@ -42,6 +42,10 @@ class DataSourceRecorded(DataSource):
 
     def list_dir_if_exists(self, dir_to_list):
         output = self.read_cmd_output_from_file("/os.listdir/", dir_to_list.rstrip('/') + "_dir")
+        return output
+
+    def exec_python_code(self, python_code, record_suffix=""):
+        output = self.read_cmd_output_from_file("/os.python.code/", hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix)
         return output
 
 
@@ -73,11 +77,14 @@ def main(tmp_dir_name, recorder_sys_argv, regression_conf):
     data_source = DataSourceRecorded(config)
 
     hca_manager = HCAManager(data_source, config)
+    hca_manager.get_data()
 
     hca_manager.display_hcas_info()
 
 
 def regression():
+    rec_data_dir_path = os.path.dirname(os.path.abspath(__file__)) + "/../recorded_data/"
+
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
     parser.add_argument('--skip-missing', action='store_true', dest="skip_missing",
@@ -108,20 +115,22 @@ def regression():
     args = parser.parse_args(cust_user_args)
 
     if args.data_source:
-        if os.path.isfile("recorded_data/" + str(args.data_source[0])):
+        if os.path.isfile(rec_data_dir_path + str(args.data_source[0])):
             recorded_data_files_list = [str(args.data_source[0])]
         else:
             print("No such data source \"" + str(args.data_source[0]) + "\"")
             sys.exit(1)
     else:
-        recorded_data_files_list = os.listdir("recorded_data")
+        recorded_data_files_list = os.listdir(rec_data_dir_path)
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
 
     if len(recorded_data_files_list) != 0:
         for recorded_data_file in recorded_data_files_list:
+            if not os.path.isfile(rec_data_dir_path + recorded_data_file):
+                continue
 
-            shutil.copyfile("recorded_data/" + recorded_data_file, tmp_dir_name + "/" + recorded_data_file)
+            shutil.copyfile(rec_data_dir_path + recorded_data_file, tmp_dir_name + "/" + recorded_data_file)
 
             tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
             tar.extractall(path=tmp_dir_name)
@@ -153,7 +162,7 @@ def regression():
                 regression_conf.skip_missing = args.skip_missing
                 main(tmp_dir_name, recorder_sys_argv, regression_conf)
                 output = stdout
-            except Exception as e:
+            except BaseException as e:
                 output = e
                 trace_back = traceback.format_exc()
             finally:
@@ -161,12 +170,14 @@ def regression():
 
             print('**************************************************************************************')
             print(BColors.BOLD + 'Recorded data file: ' + str(recorded_data_file) + BColors.ENDC)
+            print("Command: " + " ".join(recorder_sys_argv))
             print('**************************************************************************************')
             try:
                 test_output = output.getvalue()
             except AttributeError:
                 regression_run_succseeded = False
                 print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + "\n")
+                print(recorder_sys_argv)
                 print("==>  Traceback   <==")
                 print(trace_back)
                 print("==>   Error   <==")
@@ -199,6 +210,7 @@ def regression():
                 if args.verbose:
                     print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
                     print(test_output)
+            print("\n")
 
         if not args.keep_recorded_ds:
             shutil.rmtree(tmp_dir_name)

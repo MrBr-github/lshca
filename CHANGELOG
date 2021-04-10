@@ -1,3 +1,13 @@
+Ver. 3.6
+    - Feature: Added traffic view
+               New fields are: TX_bps, RX_bps
+               Limitation: Partial support on LAG interfaces.
+                           Doesen`t accoutns DPDK handled traffic
+    - Fixed bug: Fixed RoCEstat for LAG devices
+    - Fixed bug: fixed MST start/stop behaviour. It'll be left in same state as it was before lshca execution.
+    - Fixed bug: RoCEstat output printed correctly also for 'all' view
+    - Fixed bug: Fixed VF display over PF with multiple ports
+    - Fixed bug: Correctly handle inbox driver
 Ver. 3.5
     - Feature: Added cable view.
                New field are: CblPN, CblSN, CblLng, PhyLinkStat, PhyLnkSpd, PhyAnalisys
