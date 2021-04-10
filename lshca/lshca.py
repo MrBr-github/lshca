@@ -36,16 +36,16 @@ class Config(object):
 
         self.output_view = "system"
         self.output_order_general = {
-                    "system": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                    "system": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                                "IpStat", "Link", "Rate", "SRIOV", "Parent_addr", "Tempr", "LnkCapWidth", "LnkStaWidth",
                                "HCA_Type", "Bond", "BondState", "BondMiiStat"],
-                    "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
+                    "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
                            "VrtHCA", "PLid", "PGuid", "IbNetPref"],
-                    "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                    "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "RoCEstat"],
-                    "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
+                    "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
                               "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
-                    "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "RDMA", "Net", "TX_bps", "RX_bps"]
+                    "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -1192,6 +1192,21 @@ class MiscCMDs(object):
         except ValueError:
             return "=N/A="
 
+    def get_driver_ver(self):
+        mofed_ver = str(self.data_source.exec_shell_cmd("ofed_info -s ", use_cache=True))
+        regex = '.*MLNX_OFED_LINUX-(.*):.*'
+        mofed_ver = extract_string_by_regex(mofed_ver, regex)
+        if mofed_ver != "=N/A=":
+            return "mlnx_ofed-" + mofed_ver
+
+        inbox_ver = self.data_source.exec_shell_cmd("modinfo mlx5_core", use_cache=True)
+        regex = '^version:\s+([0-9].*)'
+        search_result = find_in_list(inbox_ver, regex)
+        search_result = extract_string_by_regex(search_result, regex)
+        if search_result:
+            return "inbox-" + str(search_result)
+        else:
+            return "N/A"
 
 class MlnxBDFDevice(object):
     def __init__(self, bdf, data_source, config, port=1):
@@ -1273,6 +1288,7 @@ class MlnxBDFDevice(object):
 
         # ------ Misc ------
         self.tempr = self._miscDevice.get_tempr(self.rdma)
+        self.driver_ver = self._miscDevice.get_driver_ver()
 
         # ------ SA/SMP query ------
         if self._config.sa_smp_query_device_enabled:
@@ -1416,6 +1432,7 @@ class MlnxHCA(object):
         self.sn = bdf_dev.sn
         self.pn = bdf_dev.pn
         self.fw = bdf_dev.fw
+        self.driver_ver = bdf_dev.driver_ver
         self.psid = bdf_dev.psid
         self.sys_image_guid = bdf_dev.sys_image_guid
         self.description = bdf_dev.description
@@ -1449,6 +1466,7 @@ class MlnxHCA(object):
         output = {"SN": self.sn,
                   "PN": self.pn,
                   "FW": self.fw,
+                  "Driver": self.driver_ver,
                   "PSID": self.psid,
                   "Desc": self.description,
                   "Tempr": self.tempr,
