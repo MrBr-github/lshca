@@ -1045,7 +1045,7 @@ class SYSFSDevice(object):
 
 
         self._curr_tx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
-                                                                     self._port + "/counters/port_rcv_data", record_suffix)
+                                                                     self._port + "/counters/port_xmit_data", record_suffix)
 
         if self._curr_tx_bit:
             self._curr_tx_bit = int(self._curr_tx_bit) * 8 * 4
@@ -1053,7 +1053,8 @@ class SYSFSDevice(object):
             self._curr_tx_bit = "N/A"
 
         self._curr_rx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
-                                                                     self._port + "/counters/port_xmit_data", record_suffix)
+                                                                     self._port + "/counters/port_rcv_data", record_suffix)
+
         if self._curr_rx_bit:
             self._curr_rx_bit = int(self._curr_rx_bit) * 8 * 4
         else:
