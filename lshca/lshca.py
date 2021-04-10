@@ -1036,12 +1036,12 @@ class SYSFSDevice(object):
             record_suffix = "__1"
 
         # Using this to record data if requested
-        self._curr_timestamp = self._data_source.exec_python_code("time.time()", record_suffix)
+        self._curr_timestamp = self._data_source.exec_python_code("time.time()", "_" + self.rdma + record_suffix)
 
         # Handle case when delay between 2 get_traffic executions is too short
         if hasattr(self, '_prev_timestamp') and (self._curr_timestamp - self._prev_timestamp) == 0 :
             time.sleep(0.1)
-            self._curr_timestamp = self._data_source.exec_python_code("time.time()", record_suffix)
+            self._curr_timestamp = self._data_source.exec_python_code("time.time()",  "_" + self.rdma + record_suffix)
 
 
         self._curr_tx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
