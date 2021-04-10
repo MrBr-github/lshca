@@ -23,7 +23,7 @@ jobs:
         with:
           repository: MrBr-github/lshca_regression_data
           path: recorded_data
-        
+
       - name: Merge Python ver dependant recorded data
         run: |
           set -xv
@@ -36,4 +36,4 @@ jobs:
         run: |
           set -xv
           rm -rf recorded_data/.git
-          python regression/lshca_regression.py
+          python regression/lshca_regression.py --skip-missing --display-recorded-fields
