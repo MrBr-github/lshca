@@ -22,7 +22,11 @@ import json
 import argparse
 import textwrap
 import hashlib
-
+import ctypes
+import socket
+import fcntl
+import signal
+import struct
 
 try:
     from StringIO import StringIO # for Python 2
@@ -45,7 +49,9 @@ class Config(object):
                              "IpStat", "RoCEstat"],
                     "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
                               "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
-                    "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps"]
+                    "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps"],
+                    "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                             "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -57,7 +63,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "3.6"
+        self.ver = "3.7"
 
         self.mst_device_enabled = False
         self.sa_smp_query_device_enabled = False
@@ -75,6 +81,8 @@ class Config(object):
         self.lossless_roce_expected_gtclass = "Global tclass=106"
         self.lossless_roce_expected_tcp_ecn = "1"
         self.lossless_roce_expected_rdma_cm_tos = "106"
+
+        self.lldp_capture_timeout = 65 # seconds
 
     def parse_arguments(self, user_args):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
@@ -105,16 +113,17 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'traffic', 'all'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'traffic', 'lldp', 'all'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
-                              system - (default). Show system oriented HCA info
-                              ib     - Show IB oriented HCA info. Implies "sasmpquery" data source
-                              roce   - Show RoCE oriented HCA info"
-                              cable  - Show cable and physical link HCA info. Based on mlxcable and mlxlink utils.
-                                       Note: It takes time to display this view due to underling utils execution time.
-                              traffic  - Show port traffic
-                              all    - Show all available HCA info. Aggregates all above views + MST data source.
+                              system  - (default). Show system oriented HCA info
+                              ib      - Show IB oriented HCA info. Implies "sasmpquery" data source
+                              roce    - Show RoCE oriented HCA info"
+                              cable   - Show cable and physical link HCA info. Based on mlxcable and mlxlink utils.
+                                        Note: It takes time to display this view due to underling utils execution time.
+                              traffic - Show port traffic
+                              lldp    - Show lldp information.
+                              all     - Show all available HCA info. Aggregates all above views + MST data source.
                               Note: all human readable output views are elastic. See extended help for more info.
                             ''')
                             )
@@ -175,6 +184,8 @@ class Config(object):
             self.output_view = "cable"
         elif args.view == "traffic":
             self.output_view = "traffic"
+        elif args.view == "lldp":
+            self.output_view = "lldp"
         elif args.view == "all":
             self.mst_device_enabled = True
             self.sa_smp_query_device_enabled = True
@@ -313,6 +324,18 @@ class Config(object):
          Traffic view
           TX_bps - Transmitted traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit. Based on port_rcv_data counter
           RX_bps - Recieved traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit. Based on port_xmit_data counter
+
+         LLDP view
+             This view relies on:
+              * LLDP information been sent by the connected switch
+              * local port should be up
+             NOTE1: using this view puts interfaces in to promiscuous mode, use with CAUTION
+             NOTE2: the script waits for LLDP packets to arrive,
+                    it might take """ + str(self.lldp_capture_timeout) + """ * num_of_interfaces sec to complete
+          LLDPportId    - Switch port description. LLDP TLV 2
+          LLDPsysName   - Switch system name. LLDP TLV 5
+          LLDPmgmtAddr  - Switch management IP address. LLDP TLV 8
+          LLDPsysDescr  - Switch system description. Usualy contains Switch type, OS type and OS ver. LLDP TLV 6
 
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
@@ -1208,6 +1231,7 @@ class MiscCMDs(object):
         else:
             return "N/A"
 
+
 class MlnxBDFDevice(object):
     def __init__(self, bdf, data_source, config, port=1):
         self.bdf = bdf
@@ -1221,6 +1245,7 @@ class MlnxBDFDevice(object):
         self._mlxCable = MlxCable(self._data_source)
         self._miscDevice = MiscCMDs(self._data_source, self._config)
         self._sasmpQueryDevice = SaSmpQueryDevice(self._data_source, self._config)
+        self._lldpData = LldpData(self._data_source, self._config)
 
     def get_data(self):
         # ------ SysFS ------
@@ -1297,12 +1322,33 @@ class MlnxBDFDevice(object):
         self.sw_description = self._sasmpQueryDevice.sw_description
         self.sm_guid = self._sasmpQueryDevice.sm_guid
 
+        # ------ Traffic ------
         if self._config.output_view == "traffic" or self._config.output_view == "all":
         # If traffic requested, get the reading for the second time.
         # Doing it at the end of the function lets some time to passs between 2 readings
             self._sysFSDevice.get_traffic()
             self.traff_tx_bitps = self._sysFSDevice.traff_tx_bitps
             self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
+
+        # ------ LLDP ------
+        if ( self._config.output_view == "lldp" or self._config.output_view == "all" ) and \
+          self.sriov == "PF" and self.link_layer == "Eth" and \
+          self.lnk_state == "actv":
+            self._lldpData.get_data(self.net)
+
+        if self.lnk_state == "actv":
+            self.llpd_port_id = self._lldpData.port_id
+            self.llpd_system_name =  self._lldpData.system_name
+            self.llpd_system_description = self._lldpData.system_description
+            self.llpd_mgmt_addr = self._lldpData.mgmt_addr
+        else:
+            msg = "Lnk_down"
+            if self._config.show_warnings_and_errors is True:
+                msg += self._config.warning_sign
+            self.llpd_port_id = msg
+            self.llpd_system_name =  msg
+            self.llpd_system_description = msg
+            self.llpd_mgmt_addr = msg
 
     def __repr__(self):
         return self._sysFSDevice.__repr__() + "\n" + self._pciDevice.__repr__() + "\n" + \
@@ -1414,7 +1460,11 @@ class MlnxBDFDevice(object):
                   "CblLng": self.cable_length,
                   "PhyAnalisys": self.physical_link_recommendation,
                   "TX_bps": self.traff_tx_bitps,
-                  "RX_bps": self.traff_rx_bitps
+                  "RX_bps": self.traff_rx_bitps,
+                  "LLDPportId": self.llpd_port_id,
+                  "LLDPsysName": self.llpd_system_name,
+                  "LLDPsysDescr": self.llpd_system_description,
+                  "LLDPmgmtAddr": self.llpd_mgmt_addr
                   }
         return output
 
@@ -1574,10 +1624,97 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
                 self.port_rate  = self.port_rate + self._config.error_sign
 
 
+class ifreq(ctypes.Structure):
+    _fields_ = [("ifr_ifrn", ctypes.c_char * 16),
+                ("ifr_flags", ctypes.c_short)]
+
+
+class LldpData:
+    LLDP_ETHER_PROTO = 0x88CC       # LLDP ehternet protocol number
+
+    LLDP_TLV_TYPE_BITMASK = int(0b1111111000000000) # first 7 bits of 2 bytes
+    LLDP_TLV_LENGTH_BITMASK = int(0b0000000111111111) # last 9 bits of 2 bytes
+    LLDP_TLV_TYPE_SHIFT = 9
+
+    def __init__(self, data_source, config):
+        self._config = config
+        self._data_source = data_source
+        self._interface = None
+        self._packet = None
+        self._raw_socket = None
+        self._tlv = {}
+
+        self.port_id = ""
+        self.mgmt_addr = ""
+        self.system_name = ""
+        self.system_description = ""
+
+    def parse_lldp_packet(self, rcvd_packet):
+        # Packet example
+        # (b'\x01\x80\xc2\x00\x00\x0e\xb8Y\x9f\xa9\x9c`\x88\xcc\x02\x07\x04\xb8Y\x9f\xa9\x9c\x00\x04\x07\x05Eth1/1\x06\x02\x00x\x08\x01 \n\tanc-dx-t1\x0c\x18MSN3700,Onyx,SWv3.9.0914\x0e\x04\x00\x14\x00\x04\x10\x16\x05\x01\n\x90\xfc\x85\x02\x00\x00\x00\x00\n+\x06\x01\x02\x01\x02\x02\x01\x01\x00\xfe\x19\x00\x80\xc2\t\x08\x00\x03\x00`2\x00\x002\x00\x00\x00\x00\x02\x02\x02\x02\x02\x02\x00\x02\xfe\x19\x00\x80\xc2\n\x00\x00\x03\x00`2\x00\x002\x00\x00\x00\x00\x02\x02\x02\x02\x02\x02\x00\x02\xfe\x06\x00\x80\xc2\x0b\x08\x08\xfe\x08\x00\x80\xc2\x0c\x00c\x12\xb7\x00\x00', ('ens1f0', 35020, 2, 1, b'\xb8Y\x9f\xa9\x9c`'))
+        if rcvd_packet:
+            packet = rcvd_packet[0] # taking the binary part of the tuple
+        else:
+            return
+
+        ether_payload = None
+        # this loop comes to skip vlan and similar encapsulation headers.
+        # By RFC they should not exist in LLDP packes, but in reality they do in some cases.
+        for i in range(12, 50):
+            ether_type = struct.unpack("!H", packet[i:(i + 2)])[0]
+            if hex(ether_type) == hex(self.LLDP_ETHER_PROTO):
+                ether_payload = packet[(i + 2):] # Eternet payload starts after Ether type
+                break
+        if ether_payload == None:
+            print("Failed to parce ethernet frame. Exititng")
+            sys.exit(1)
+
+        i = 0
+        while i < len(ether_payload):
+            tlv_header = struct.unpack("!H", ether_payload[i:i+2])[0]
+            tlv_type = ( int(tlv_header) & self.LLDP_TLV_TYPE_BITMASK ) >> self.LLDP_TLV_TYPE_SHIFT
+            tlv_len = int(tlv_header) & self.LLDP_TLV_LENGTH_BITMASK
+
+            tlv_value = ether_payload[i+2:i+2+tlv_len]
+            i += 2 + tlv_len
+
+            self._tlv[tlv_type] = tlv_value
+
+        try:
+            # [1:] is hack to skip \x05 in port id string
+            self.port_id = self._tlv[2][1:].decode("utf-8")
+        except:
+            self.port_id = "Fail2Decode"
+
+        try:
+            self.system_name = self._tlv[5].decode("utf-8")
+        except:
+            self.system_name = "Fail2Decode"
+
+        if 6 in self._tlv:
+            try:
+                self.system_description = self._tlv[6].decode("utf-8")
+            except:
+                self.system_description = "Fail2Decode"
+
+        if 8 in self._tlv:
+            try:
+                # TBD: add idetification of IPv type and take length in to consediration
+                self.mgmt_addr = socket.inet_ntoa(self._tlv[8][2:6])
+            except:
+                self.mgmt_addr = "Fail2Decode"
+
+    def get_data(self, net):
+        self._interface = net
+        packet = self._data_source.get_raw_socket_data(net, self.LLDP_ETHER_PROTO, self._config.lldp_capture_timeout, use_cache=True)
+        self.parse_lldp_packet(packet)
+
+
 class DataSource(object):
     def __init__(self, config):
         self.cache = {}
         self.config = config
+        self.interfaces_struct = []
         if self.config.record_data_for_debug is True:
             if not os.path.exists(self.config.record_dir):
                 os.makedirs(self.config.record_dir)
@@ -1610,6 +1747,7 @@ class DataSource(object):
             environment.append("Release:  " + " ".join(self.exec_shell_cmd("cat /etc/*release")))
             environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
             self.record_data("environment", environment)
+            self.record_data("output_fields", self.config.output_order)
 
     def exec_shell_cmd(self, cmd, use_cache=False):
         cache_key = self.cmd_to_str(cmd)
@@ -1710,6 +1848,76 @@ class DataSource(object):
             self.record_data(cmd, output)
 
         return output
+
+    def get_raw_socket_data(self, interface, ether_proto, capture_timeout, use_cache=True):
+        cache_key = self.cmd_to_str(str(interface) + str(ether_proto))
+
+        if use_cache is True and cache_key in self.cache:
+            output = self.cache[cache_key]
+
+        else:
+            try:
+                raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ether_proto))
+            except socket.error as e:
+                    print('Socket could not be created. {}'.format(e))
+                    sys.exit()
+
+            raw_socket.bind((interface, ether_proto))
+            self.interfaces_struct.append({"interface":interface, "socket": raw_socket})
+            self._set_interface_promisc_status(interface, raw_socket, True)
+
+            signal.signal(signal.SIGINT, self.signal_recieved)
+            signal.signal(signal.SIGALRM, self.signal_recieved)
+            signal.alarm(capture_timeout)
+
+            try:
+                output = raw_socket.recvfrom(65565)
+            except TimeoutError:
+                pass
+
+            signal.alarm(0)
+            self._set_interface_promisc_status(interface, raw_socket, False)
+            self.interfaces_struct.remove({"interface":interface, "socket": raw_socket})
+            signal.signal(signal.SIGINT, signal.SIG_DFL)
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+
+            if use_cache is True:
+                self.cache.update({cache_key: output})
+
+        if self.config.record_data_for_debug is True:
+            cmd = "raw.socket.data/" + cache_key
+            self.record_data(cmd, output)
+
+        return output
+
+    def signal_recieved(self, signal_number, stack_frame):
+        interfaces_affected = ""
+        for int_str in self.interfaces_struct:
+            self._set_interface_promisc_status(int_str["interface"], int_str["socket"], False)
+            interfaces_affected += " " + str(int_str["interface"])
+
+        # SIGALRM = 14
+        if signal_number == 14:
+            print("Timeout. Interface set as non-promisc. Failed to get LLDP data for '{}'.".format(interfaces_affected), file=sys.stderr)
+            raise TimeoutError
+        else:
+            print("\nSignal '{}' recieved. Interfaces {} set as non-promisc. Exiting".format(signal_number, interfaces_affected), file=sys.stderr)
+            sys.exit(1)
+
+    def _set_interface_promisc_status(self, interface, raw_socket, promisc):
+        IFF_PROMISC = 0x100             # Set interface promiscuous
+        SIOCGIFFLAGS = 0x8913           # Get flags  SIOC G IF FLAGS
+        SIOCSIFFLAGS = 0x8914           # Set flags  SIOC S IF FLAGS
+
+        ifr = ifreq()
+        ifr.ifr_ifrn = interface.encode('UTF-8')
+
+        fcntl.ioctl(raw_socket.fileno(), SIOCGIFFLAGS, ifr)
+        if promisc:
+            ifr.ifr_flags |= IFF_PROMISC # Add promisc flag
+        else:
+            ifr.ifr_flags &= ~IFF_PROMISC # Remove promisc flag
+        fcntl.ioctl(raw_socket.fileno(), SIOCSIFFLAGS, ifr) # S for Set
 
     @staticmethod
     def cmd_to_str(cmd):
