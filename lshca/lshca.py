@@ -1582,7 +1582,7 @@ class DataSource(object):
             if not os.path.exists(self.config.record_dir):
                 os.makedirs(self.config.record_dir)
 
-            self.config.record_tar_file = "%s/%s--%s--v%s.tar" % (self.config.record_dir, os.uname()[1],
+            self.config.record_tar_file = "%s/%s--%s--%s--v%s.tar" % (self.config.record_dir, os.uname()[1], str(self.config.output_view).upper(),
                                                                   str(time.time()), self.config.ver)
 
             print("\nlshca started data recording")
