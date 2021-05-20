@@ -48,6 +48,11 @@ class DataSourceRecorded(DataSource):
         output = self.read_cmd_output_from_file("/os.python.code/", hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix)
         return output
 
+    def get_raw_socket_data(self, interface, ether_proto, capture_timeout, use_cache=True):
+        cache_key = self.cmd_to_str(str(interface) + str(ether_proto))
+        output = self.read_cmd_output_from_file("/raw.socket.data/", cache_key)
+        return output
+
 
 class BColors:
     HEADER = '\033[95m'
