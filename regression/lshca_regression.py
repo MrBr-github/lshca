@@ -131,26 +131,28 @@ def regression():
                 continue
 
             shutil.copyfile(rec_data_dir_path + recorded_data_file, tmp_dir_name + "/" + recorded_data_file)
+            untared_data_source_dir = tmp_dir_name + "/" + recorded_data_file.replace(".tar", "")
+            os.mkdir(untared_data_source_dir)
 
             tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
-            tar.extractall(path=tmp_dir_name)
+            tar.extractall(path=untared_data_source_dir)
 
-            if args.display_recorded_fields:
-                try:
-                    f = open(tmp_dir_name + "/output_fields", "r")
-                    recorded_sys_args = pickle.load(f)
-                except:
-                    print("Error: No output fileds saved")
-                    sys.exit(1)
-                recorded_sys_args.insert(0, "-o")
-                recorded_sys_args.insert(0, "lshca_run_by_regression")
-            elif args.parameters:
+            if args.parameters:
                 recorded_sys_args = args.parameters[0].split(" ")
                 recorded_sys_args.insert(0, "lshca_run_by_regression")
             else:
-                f = open(tmp_dir_name + "/cmd", "rb")
+                f = open(untared_data_source_dir + "/cmd", "rb")
                 recorded_sys_args = pickle.load(f)
                 recorded_sys_args = recorded_sys_args.split(" ")
+                if args.display_recorded_fields:
+                    try:
+                        f = open(untared_data_source_dir + "/output_fields", "rb")
+                        recorded_output_fields = pickle.load(f)
+                    except:
+                        print(BColors.FAIL + "Error: No output fileds saved in "  + recorded_data_file + BColors.ENDC )
+                        sys.exit(1)
+                    recorded_sys_args.append("-o")
+                    recorded_sys_args.append(",".join(recorded_output_fields))
 
             stdout = StringIO()
 
@@ -160,7 +162,7 @@ def regression():
             try:
                 regression_conf = RegressionConfig()
                 regression_conf.skip_missing = args.skip_missing
-                main(tmp_dir_name, recorded_sys_args, regression_conf)
+                main(untared_data_source_dir, recorded_sys_args, regression_conf)
                 output = stdout
             except BaseException as e:
                 output = e
@@ -184,7 +186,7 @@ def regression():
                 print(output)
                 continue
 
-            f = open(tmp_dir_name + "/output", "rb")
+            f = open(untared_data_source_dir + "/output", "rb")
             saved_output = pickle.load(f)
 
             if args.remove_separators:
@@ -214,6 +216,8 @@ def regression():
 
         if not args.keep_recorded_ds:
             shutil.rmtree(tmp_dir_name)
+        else:
+            print("Data sources left in {} directory".format(tmp_dir_name))
 
         if not regression_run_succseeded:
             sys.exit(1)
