@@ -57,7 +57,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "3.6"
+        self.ver = "3.6.1"
 
         self.mst_device_enabled = False
         self.sa_smp_query_device_enabled = False
@@ -1592,6 +1592,7 @@ class DataSource(object):
             environment.append("Release:  " + " ".join(self.exec_shell_cmd("cat /etc/*release")))
             environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
             self.record_data("environment", environment)
+            self.record_data("output_fields", self.config.output_order)
 
     def exec_shell_cmd(self, cmd, use_cache=False):
         cache_key = self.cmd_to_str(cmd)

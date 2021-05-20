@@ -8,7 +8,7 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 setup(
   name = 'lshca',
   packages = ['lshca'],
-  version = '3.6',
+  version = '3.6.1',
   license='GNU GPLv3',
   description = 'This utility comes to provide bird\'s-eye view of HCAs installed',
   long_description=long_description,
