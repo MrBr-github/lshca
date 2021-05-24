@@ -82,7 +82,8 @@ class Config(object):
         self.lossless_roce_expected_tcp_ecn = "1"
         self.lossless_roce_expected_rdma_cm_tos = "106"
 
-        self.lldp_capture_timeout = 65 # seconds
+        # based on https://docs.mellanox.com/pages/viewpage.action?pageId=43714202#LinkLayerDiscoveryProtocol(LLDP)-lldptimer
+        self.lldp_capture_timeout = 35 # seconds. Based on default 30s value in Mellanox Onyx OS
 
     def parse_arguments(self, user_args):
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
@@ -330,8 +331,8 @@ class Config(object):
 
          LLDP view
              This view relies on:
-              * LLDP information been sent by the connected switch
-              * local port should be up
+              * LLDP information been sent by the connected switch (if not NoLldpRcvd error msg will be recieved)
+              * local port should be up (if not LnkDown warrning msg will be recieved)
              NOTE1: using this view puts interfaces in to promiscuous mode, use with CAUTION
              NOTE2: the script waits for LLDP packets to arrive,
                     it might take """ + str(self.lldp_capture_timeout) + """ * num_of_interfaces sec to complete
@@ -1127,11 +1128,13 @@ class SYSFSDevice(object):
         else:
             self._curr_rx_bit = "N/A"
 
-
         self._curr_packet_seq_err = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
                                                                      self._port + "/hw_counters/packet_seq_err", record_suffix, use_cache=True)
 
-        self._curr_packet_seq_err = int(self._curr_packet_seq_err)
+        if self._curr_packet_seq_err:
+            self._curr_packet_seq_err = int(self._curr_packet_seq_err)
+        else:
+            self._curr_packet_seq_err = "N/A"
 
         try:
             # not handling counter rollover, this is too reare case
@@ -1388,23 +1391,19 @@ class MlnxBDFDevice(object):
 
         # ------ LLDP ------
         if ( self._config.output_view == "lldp" or self._config.output_view == "all" ) and \
-          self.sriov == "PF" and self.link_layer == "Eth" and \
-          self.lnk_state == "actv":
-            self._lldpData.get_data(self.net)
+            self.net != self.bond_master and \
+          ( \
+            ( self.sriov == "PF" and self.link_layer == "Eth" ) or \
+            # Handle second interface in the bond, it has no self.link_layer value
+            ( self.sriov == "PF" and self.bond_master != "=N/A=" and self.bond_master != "") \
+          ):
+            self._lldpData.get_data(self.net, self.ip_state)
 
-        if self.lnk_state == "actv":
-            self.llpd_port_id = self._lldpData.port_id
-            self.llpd_system_name =  self._lldpData.system_name
-            self.llpd_system_description = self._lldpData.system_description
-            self.llpd_mgmt_addr = self._lldpData.mgmt_addr
-        else:
-            msg = "Lnk_down"
-            if self._config.show_warnings_and_errors is True:
-                msg += self._config.warning_sign
-            self.llpd_port_id = msg
-            self.llpd_system_name =  msg
-            self.llpd_system_description = msg
-            self.llpd_mgmt_addr = msg
+        self.llpd_port_id = self._lldpData.port_id
+        self.llpd_system_name =  self._lldpData.system_name
+        self.llpd_system_description = self._lldpData.system_description
+        self.llpd_mgmt_addr = self._lldpData.mgmt_addr
+
 
     def __repr__(self):
         return self._sysFSDevice.__repr__() + "\n" + self._pciDevice.__repr__() + "\n" + \
@@ -1619,6 +1618,10 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
         self.physical_link_speed = ""
         self.physical_link_recommendation = ""
         self.physical_link_status = ""
+        self.llpd_port_id = ""
+        self.llpd_system_name =  ""
+        self.llpd_system_description = ""
+        self.llpd_mgmt_addr  = ""
 
         sys_prefix = "/sys/devices/virtual/net/" + self.net
 
@@ -1761,10 +1764,36 @@ class LldpData:
             except:
                 self.mgmt_addr = "Fail2Decode"
 
-    def get_data(self, net):
+    def get_data(self, net, ip_state):
+        if sys.version_info[0] < 3:
+            raise Exception("Getting LLDP data requires Python3")
+
         self._interface = net
+
+        if ip_state.startswith("down"):
+            msg = "LnkDown"
+            if self._config.show_warnings_and_errors is True:
+                msg += self._config.warning_sign
+            self.port_id = msg
+            self.system_name =  msg
+            self.system_description = msg
+            self.mgmt_addr = msg
+
+            return
+
         packet = self._data_source.get_raw_socket_data(net, self.LLDP_ETHER_PROTO, self._config.lldp_capture_timeout, use_cache=True)
-        self.parse_lldp_packet(packet)
+        if packet:
+            if str(packet) == "TimeoutError":
+                msg = "NoLldpRcvd"
+                if self._config.show_warnings_and_errors is True:
+                    msg += self._config.error_sign
+                self.port_id = msg
+                self.system_name =  msg
+                self.system_description = msg
+                self.mgmt_addr = msg
+                return
+            else:
+                self.parse_lldp_packet(packet)
 
 
 class DataSource(object):
@@ -1948,7 +1977,7 @@ class DataSource(object):
             try:
                 output = raw_socket.recvfrom(65565)
             except TimeoutError:
-                pass
+                output = "TimeoutError"
 
             signal.alarm(0)
             self._set_interface_promisc_status(interface, raw_socket, False)
@@ -1973,7 +2002,6 @@ class DataSource(object):
 
         # SIGALRM = 14
         if signal_number == 14:
-            print("Timeout. Interface set as non-promisc. Failed to get LLDP data for '{}'.".format(interfaces_affected), file=sys.stderr)
             raise TimeoutError
         else:
             print("\nSignal '{}' recieved. Interfaces {} set as non-promisc. Exiting".format(signal_number, interfaces_affected), file=sys.stderr)
