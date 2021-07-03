@@ -3,6 +3,8 @@ Ver. 3.7
                New field: Driver
     - Feature: Added Link cabability and status PCI generation identification.
                LnkCapSpeed now has Gx suffix
+    - Feature: Added erro counter to Traffic view, it counts how many times there was a sequence number gap
+               New field: PktSeqErr
 Ver. 3.6
     - Feature: Added traffic view
                New fields are: TX_bps, RX_bps

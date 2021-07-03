@@ -49,7 +49,7 @@ class Config(object):
                              "IpStat", "RoCEstat"],
                     "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
                               "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
-                    "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps"],
+                    "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps", "PktSeqErr"],
                     "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"]
         }
@@ -322,9 +322,11 @@ class Config(object):
                                    │└──── pfc - expected \"""" + self.lossless_roce_expected_pfc + """\"
                                    └───── trust - expected \"""" + self.lossless_roce_expected_trust + """\"
 
-         Traffic view
-          TX_bps - Transmitted traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit. Based on port_rcv_data counter
-          RX_bps - Recieved traffic in bit/sec. K, M ,G used for human readbility. K = 1000 bit. Based on port_xmit_data counter
+         Traffic view (K, M ,G used for human readbility. K = 1000 bit.)
+          TX_bps    - Transmitted traffic in bit/sec. Based on port_rcv_data counter
+          RX_bps    - Recieved traffic in bit/sec. Based on port_xmit_data counter
+          PktSeqErr - The number of received NAK sequence error packets (counts how many times there was a sequence number gap)
+                      Based on packet_seq_err counter
 
          LLDP view
              This view relies on:
@@ -1079,6 +1081,7 @@ class SYSFSDevice(object):
 
         self.traff_tx_bitps = "N/A"
         self.traff_rx_bitps = "N/A"
+        self.packet_seq_err_per_sec = "N/A"
 
     def get_traffic(self):
         # see https://community.mellanox.com/s/article/understanding-mlx5-linux-counters-and-status-parameters for more info about the counteres
@@ -1088,6 +1091,7 @@ class SYSFSDevice(object):
         try:
             self._prev_tx_bit = self._curr_tx_bit
             self._prev_rx_bit = self._curr_rx_bit
+            self._prev_packet_seq_err = self._curr_packet_seq_err
             self._prev_timestamp = self._curr_timestamp
             # record suffix var used as a hack during lshca data recording , this creates 2 different paths that will be recorder seperately
             record_suffix = "__2"
@@ -1119,6 +1123,12 @@ class SYSFSDevice(object):
         else:
             self._curr_rx_bit = "N/A"
 
+
+        self._curr_packet_seq_err = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
+                                                                     self._port + "/hw_counters/packet_seq_err", record_suffix, use_cache=True)
+
+        self._curr_packet_seq_err = int(self._curr_packet_seq_err)
+
         try:
             # not handling counter rollover, this is too reare case
             self.traff_tx_bitps = (self._curr_tx_bit - self._prev_tx_bit) / (self._curr_timestamp - self._prev_timestamp)
@@ -1126,6 +1136,9 @@ class SYSFSDevice(object):
 
             self.traff_rx_bitps = (self._curr_rx_bit - self._prev_rx_bit) / (self._curr_timestamp - self._prev_timestamp)
             self.traff_rx_bitps = humanize_number(self.traff_rx_bitps)
+
+            self.packet_seq_err_per_sec = str((self._curr_packet_seq_err - self._prev_packet_seq_err) / (self._curr_timestamp - self._prev_timestamp))
+
         except (AttributeError,TypeError):
             pass
 
@@ -1312,12 +1325,14 @@ class MlnxBDFDevice(object):
             self._sysFSDevice.get_traffic()
         self.traff_tx_bitps = self._sysFSDevice.traff_tx_bitps
         self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
+        self.packet_seq_err_per_sec = self._sysFSDevice.packet_seq_err_per_sec
 
         # ------ PCI ------
         self._pciDevice.get_data()
         self.description = self._pciDevice.description
         self.lnkCapWidth = self._pciDevice.lnkCapWidth
         self.lnkStaWidth = self._pciDevice.lnkStaWidth
+
         if self.sriov == "VF":
             self.lnkCapWidth = ""
             self.lnkStaWidth = ""
@@ -1365,6 +1380,7 @@ class MlnxBDFDevice(object):
             self._sysFSDevice.get_traffic()
             self.traff_tx_bitps = self._sysFSDevice.traff_tx_bitps
             self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
+            self.packet_seq_err_per_sec = self._sysFSDevice.packet_seq_err_per_sec
 
         # ------ LLDP ------
         if ( self._config.output_view == "lldp" or self._config.output_view == "all" ) and \
@@ -1497,6 +1513,7 @@ class MlnxBDFDevice(object):
                   "PhyAnalisys": self.physical_link_recommendation,
                   "TX_bps": self.traff_tx_bitps,
                   "RX_bps": self.traff_rx_bitps,
+                  "PktSeqErr": self.packet_seq_err_per_sec,
                   "LLDPportId": self.llpd_port_id,
                   "LLDPsysName": self.llpd_system_name,
                   "LLDPsysDescr": self.llpd_system_description,
