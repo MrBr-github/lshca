@@ -241,13 +241,14 @@ class Config(object):
         Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
 
         HCA header:
-          Dev   - Device number. Enumerated value padded with #
-          Desc  - HCA description as appears in lspci output
-          FW    - HCA currently running firmware version
-          PN    - HCA part number including revision
-          SN    - HCA serial number
-          PSID  - HCA PSID number (Parameter Set ID)
-          Tempr - HCA temperature. Based on mget_temp utility from MFT
+          Dev    - Device number. Enumerated value padded with #
+          Desc   - HCA description as appears in lspci output
+          FW     - HCA currently running firmware version
+          PN     - HCA part number including revision
+          SN     - HCA serial number
+          PSID   - HCA PSID number (Parameter Set ID)
+          Driver - Driver source (mlnx_ofed/inbox) and it version
+          Tempr  - HCA temperature. Based on mget_temp utility from MFT
 
         BDF devices:
          Generic
