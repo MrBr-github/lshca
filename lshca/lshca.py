@@ -275,8 +275,8 @@ class Config(object):
           Link          - Link type. Possible values:
                             IB  - InfiniBand
                             Eth - Ethernet
-          LnkCapWidth   - PCI width capability. Number of PCI lanes required by HCA. PF only.
-          LnkStaWidth   - PCI width status. Number of PCI lanes avaliable for HCA in current slot. PF only.
+          LnkCapWidth   - PCI width capability. Number of PCI lanes and PCI generation required by HCA. PF only.
+          LnkStaWidth   - PCI width status. Number of PCI lanes and PCI generation avaliable for HCA in current slot. PF only.
           Parent_addr   - BDF address of SRIOV parent Physical Function for this Virtual Function
           Rate          - Link rate in Gbit/s
                           On bond master, will show all slave speeds delimited by /
@@ -547,7 +547,8 @@ class Output(object):
                 # ---- Remove LnkStaWidth if it matches LnkCapWidth
                 if "LnkStaWidth" in bdf_device:
                     field_value = bdf_device["LnkStaWidth"].strip()
-                    if re.search(re.escape(self.config.error_sign) + "$", field_value):
+                    if re.search(re.escape(self.config.error_sign) + "$", field_value) or \
+                            re.search(re.escape(self.config.warning_sign) + "$", field_value):
                         remove_lnk_sta_width = False
 
                 # ---- Remove Port if all values are 1
@@ -806,15 +807,31 @@ class PCIDevice(object):
         self.sn = self.get_info_from_lspci_data("\[SN\].*", ".*:(.+)")
         self._pn = self.get_info_from_lspci_data("\[PN\].*", ".*:(.+)")
         self.revision = self.get_info_from_lspci_data("\[EC\].*", ".*:(.+)")
-        self.lnkCapWidth = self.get_info_from_lspci_data("LnkCap:.*Width.*", ".*Width (x[0-9]+)")
-        self.lnkStaWidth = self.get_info_from_lspci_data("LnkSta:.*Width.*", ".*Width (x[0-9]+)")
-        self.pciGen = self.get_info_from_lspci_data(".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn].*",
-                                                    ".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn]([0-9]) +")
+        self._lnkCapWidth = self.get_info_from_lspci_data("LnkCap:.*Width.*", ".*Width (x[0-9]+)")
+        self._lnkStaWidth = self.get_info_from_lspci_data("LnkSta:.*Width.*", ".*Width (x[0-9]+)")
+        self._lnkCapSpeed = self.get_info_from_lspci_data("LnkCap:.*Speed.*", ".*Speed ([0-9]+)")
+        self._lnkStaSpeed = self.get_info_from_lspci_data("LnkSta:.*Speed.*", ".*Speed ([0-9]+)")
+        self._pciGen = self.get_info_from_lspci_data(".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn].*",
+                                            ".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn]([0-9]) +")
 
-        if self.lnkCapWidth != self.lnkStaWidth and self._config.show_warnings_and_errors is True:
+        # self._pciGen and below speed IF statements here for backward compatibility of regression
+        # they can be safely removed if all recorded sources will contain Speed
+        if self._lnkCapSpeed:
+            self.lnkCapWidth = str(self._lnkCapWidth) + " G" + self.pci_speed_to_pci_gen(self._lnkCapSpeed)
+        else:
+            self.lnkCapWidth = str(self.lnkCapWidth) + " G" + str(self.pciGen)
+
+        if self._lnkStaSpeed:
+            self.lnkStaWidth = str(self._lnkStaWidth) + " G" + self.pci_speed_to_pci_gen(self._lnkStaSpeed)
+        else:
+            self.lnkStaWidth = str(self._lnkStaWidth)
+
+
+        if self._lnkCapWidth != self._lnkStaWidth and self._config.show_warnings_and_errors is True:
             self.lnkStaWidth = str(self.lnkStaWidth) + self._config.error_sign
+        elif self._lnkCapSpeed != self._lnkStaSpeed and self._config.show_warnings_and_errors is True:
+            self.lnkStaWidth = str(self.lnkStaWidth) + self._config.warning_sign
 
-        self.lnkCapWidth = str(self.lnkCapWidth) + " G" + str(self.pciGen)
 
     def __repr__(self):
         delim = " "
@@ -835,6 +852,24 @@ class PCIDevice(object):
         search_result = find_in_list(self._data, search_regex)
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
+
+    @staticmethod
+    def pci_speed_to_pci_gen(speed):
+        if str(speed) == "2.5":
+            gen = "1"
+        elif str(speed) == "5":
+            gen = "2"
+        elif str(speed) == "8":
+            gen = "3"
+        elif str(speed) == "16":
+            gen = "4"
+        elif str(speed) == "32":
+            gen = "5"
+        elif str(speed) == "64":
+            gen = "6"
+        else:
+            gen = "_unknown"
+        return gen
 
 
 class SYSFSDevice(object):
