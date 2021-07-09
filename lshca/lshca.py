@@ -1099,16 +1099,18 @@ class SYSFSDevice(object):
             record_suffix = "__1"
 
         # Using this to record data if requested
-        self._curr_timestamp = self._data_source.exec_python_code("time.time()", "_" + self.rdma + record_suffix)
+        self._curr_timestamp = self._data_source.exec_python_code("time.time()", "_" + self.rdma + record_suffix, use_cache=True)
 
         # Handle case when delay between 2 get_traffic executions is too short
         if hasattr(self, '_prev_timestamp') and (self._curr_timestamp - self._prev_timestamp) == 0 :
             time.sleep(0.1)
             self._curr_timestamp = self._data_source.exec_python_code("time.time()",  "_" + self.rdma + record_suffix)
 
-
+        # Use of cache required in case there is a bond, bond and it's first interface has same driver information
+        # If cache won't be used, bond interface overwrites readings of first interface - creating issues in recorded data and regreession
+        # Cache takes record_suffix in to consediration
         self._curr_tx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
-                                                                     self._port + "/counters/port_xmit_data", record_suffix)
+                                                                     self._port + "/counters/port_xmit_data", record_suffix, use_cache=True)
 
         if self._curr_tx_bit:
             self._curr_tx_bit = int(self._curr_tx_bit) * 8 * 4
@@ -1116,7 +1118,7 @@ class SYSFSDevice(object):
             self._curr_tx_bit = "N/A"
 
         self._curr_rx_bit = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
-                                                                     self._port + "/counters/port_rcv_data", record_suffix)
+                                                                     self._port + "/counters/port_rcv_data", record_suffix, use_cache=True)
 
         if self._curr_rx_bit:
             self._curr_rx_bit = int(self._curr_rx_bit) * 8 * 4
@@ -1842,17 +1844,28 @@ class DataSource(object):
         tar.addfile(tarinfo, tar_contents)
         tar.close()
 
-    def read_file_if_exists(self, file_to_read, record_suffix=""):
-        if os.path.exists(file_to_read):
-            f = open(file_to_read, "r")
-            try:
-                output = f.read()
-            except IOError as exception:
-                print("Error: failed to read {}".format(file_to_read), file=sys.stderr)
-                output = ""
-            f.close()
+    def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
+        cache_key = self.cmd_to_str(str(file_to_read) + str(record_suffix))
+
+        if use_cache is True and cache_key in self.cache:
+            output = self.cache[cache_key]
         else:
-            output = ""
+            if os.path.exists(file_to_read):
+                f = open(file_to_read, "r")
+                try:
+                    output = f.read()
+                except IOError as exception:
+                    print("Driver error: failed to read {}".format(file_to_read), file=sys.stderr)
+                    output = ""
+                except Exception as e:
+                    print("\n\nFailed to read file" + str(file_to_read) + "\n\n")
+                    raise
+                f.close()
+            else:
+                output = ""
+
+            if use_cache is True:
+                self.cache.update({cache_key: output})
 
         if self.config.record_data_for_debug is True:
             cmd = "os.path.exists" + file_to_read + record_suffix
@@ -1893,8 +1906,16 @@ class DataSource(object):
 
         return output
 
-    def exec_python_code(self, python_code, record_suffix=""):
-        output = eval(python_code)
+    def exec_python_code(self, python_code, record_suffix="", use_cache=False):
+        cache_key = self.cmd_to_str(str(python_code) + str(record_suffix))
+
+        if use_cache is True and cache_key in self.cache:
+            output = self.cache[cache_key]
+        else:
+            output = eval(python_code)
+
+            if use_cache is True:
+                self.cache.update({cache_key: output})
 
         if self.config.record_data_for_debug is True:
             cmd = "os.python.code/" + hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix
@@ -1907,7 +1928,6 @@ class DataSource(object):
 
         if use_cache is True and cache_key in self.cache:
             output = self.cache[cache_key]
-
         else:
             try:
                 raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ether_proto))
