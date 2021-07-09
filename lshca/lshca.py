@@ -566,8 +566,10 @@ class Output(object):
 
                 # ---- Remove LnkStat if all are actv
                 if "LnkStat" in bdf_device:
-                    if ( bdf_device["LnkStat"].strip() != "actv" and ( bdf_device["Bond"] == "" or bdf_device["Bond"] == "=N/A=" ) ) or \
-                       ( bdf_device["LnkStat"].strip() != "" and ( bdf_device["Bond"] != "" and  bdf_device["Bond"] != "=N/A=" ) ):
+                    if ( bdf_device["LnkStat"].strip() != "actv" and ( bdf_device.get("Bond") == "" or bdf_device.get("Bond") == "=N/A=" ) ) or \
+                    ( bdf_device["LnkStat"].strip() != "" and \
+                        ( bdf_device.get("Bond") != "" and \
+                                bdf_device.get("Bond") != "=N/A=" ) ):
                         remove_lnk_stat = False
 
                 # ---- Remove bond related fields if no bond configured
