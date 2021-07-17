@@ -147,7 +147,12 @@ def regression():
                 recorded_sys_args.insert(0, "lshca_run_by_regression")
             else:
                 f = open(untared_data_source_dir + "/cmd", "rb")
-                recorded_sys_args = pickle.load(f)
+                try:
+                    recorded_sys_args = pickle.load(f)
+                except ValueError as e:
+                    print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+                    raise e
+
                 recorded_sys_args = recorded_sys_args.split(" ")
                 if args.display_recorded_fields:
                     try:
@@ -192,7 +197,11 @@ def regression():
                 continue
 
             f = open(untared_data_source_dir + "/output", "rb")
-            saved_output = pickle.load(f)
+            try:
+                saved_output = pickle.load(f)
+            except ValueError as e:
+                print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+                raise e
 
             if args.remove_separators:
                 print(regression_conf.output_separator_char)
