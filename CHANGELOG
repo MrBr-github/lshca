@@ -1,10 +1,14 @@
 Ver. 3.7
+    - Feature: Added lldp view
+               New fields: LLDPportId, LLDPsysName, LLDPmgmtAddr, LLDPsysDescr
     - Feature: Added driver version both for mlnx_ofed and inbox
                New field: Driver
     - Feature: Added Link cabability and status PCI generation identification.
                LnkCapSpeed now has Gx suffix
-    - Feature: Added erro counter to Traffic view, it counts how many times there was a sequence number gap
+    - Feature: Added error counter to Traffic view, it counts how many times there was a sequence number gap
                New field: PktSeqErr
+    - Fixed bug: Fixed sporadically missing 'Bond' and subsequent tracebacks
+    - Fixed bug: Using cache in traffic view this resolves issues in traffic display on bond and bond slave interfaces
 Ver. 3.6
     - Feature: Added traffic view
                New fields are: TX_bps, RX_bps
