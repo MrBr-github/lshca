@@ -32,7 +32,7 @@ class DataSourceRecorded(DataSource):
         output = self.read_cmd_output_from_file("/shell.cmd/", cmd)
         return output
 
-    def read_file_if_exists(self, file_to_read, record_suffix=""):
+    def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
         output = self.read_cmd_output_from_file("/os.path.exists/", file_to_read + record_suffix)
         return output
 
@@ -44,7 +44,7 @@ class DataSourceRecorded(DataSource):
         output = self.read_cmd_output_from_file("/os.listdir/", dir_to_list.rstrip('/') + "_dir")
         return output
 
-    def exec_python_code(self, python_code, record_suffix=""):
+    def exec_python_code(self, python_code, record_suffix="", use_cache=False):
         output = self.read_cmd_output_from_file("/os.python.code/", hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix)
         return output
 
