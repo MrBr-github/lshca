@@ -1764,7 +1764,7 @@ class LldpData:
             except:
                 self.mgmt_addr = "Fail2Decode"
 
-    def lldp_err_msg(self, msg: str, sign: str) -> None:
+    def lldp_err_msg(self, msg, sign):
         if self._config.show_warnings_and_errors is True:
             msg += sign
         self.port_id = msg
@@ -1772,7 +1772,7 @@ class LldpData:
         self.system_description = msg
         self.mgmt_addr = msg
 
-    def get_data(self, net: str, ip_state: str) -> None:
+    def get_data(self, net, ip_state):
         if sys.version_info[0] < 3:
             raise Exception("Getting LLDP data requires Python3")
 
