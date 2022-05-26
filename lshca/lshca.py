@@ -323,16 +323,16 @@ class Config(object):
                                    │└──── pfc - expected \"""" + self.lossless_roce_expected_pfc + """\"
                                    └───── trust - expected \"""" + self.lossless_roce_expected_trust + """\"
 
-         Traffic view (K, M ,G used for human readbility. K = 1000 bit.)
+         Traffic view (K, M ,G used for human readability. K = 1000 bit.)
           TX_bps    - Transmitted traffic in bit/sec. Based on port_rcv_data counter
-          RX_bps    - Recieved traffic in bit/sec. Based on port_xmit_data counter
+          RX_bps    - Received traffic in bit/sec. Based on port_xmit_data counter
           PktSeqErr - The number of received NAK sequence error packets (counts how many times there was a sequence number gap)
                       Based on packet_seq_err counter
 
          LLDP view
              This view relies on:
-              * LLDP information been sent by the connected switch (if not NoLldpRcvd error msg will be recieved)
-              * local port should be up (if not LnkDown warrning msg will be recieved)
+              * LLDP information been sent by the connected switch (if not NoLldpRcvd error msg will be received)
+              * local port should be up and valid (if not LnkDown/LnkStatUnclr warning msg will be received)
              NOTE1: using this view puts interfaces in to promiscuous mode, use with CAUTION
              NOTE2: the script waits for LLDP packets to arrive,
                     it might take """ + str(self.lldp_capture_timeout) + """ * num_of_interfaces sec to complete
@@ -1764,33 +1764,32 @@ class LldpData:
             except:
                 self.mgmt_addr = "Fail2Decode"
 
-    def get_data(self, net, ip_state):
+    def lldp_err_msg(self, msg: str, sign: str) -> None:
+        if self._config.show_warnings_and_errors is True:
+            msg += sign
+        self.port_id = msg
+        self.system_name =  msg
+        self.system_description = msg
+        self.mgmt_addr = msg
+
+    def get_data(self, net: str, ip_state: str) -> None:
         if sys.version_info[0] < 3:
             raise Exception("Getting LLDP data requires Python3")
 
         self._interface = net
 
-        if ip_state.startswith("down"):
-            msg = "LnkDown"
-            if self._config.show_warnings_and_errors is True:
-                msg += self._config.warning_sign
-            self.port_id = msg
-            self.system_name =  msg
-            self.system_description = msg
-            self.mgmt_addr = msg
+        if ip_state == "":
+            self.lldp_err_msg("LnkStatUnclr", self._config.warning_sign)
+            return
 
+        if ip_state.startswith("down"):
+            self.lldp_err_msg("LnkDown", self._config.warning_sign)
             return
 
         packet = self._data_source.get_raw_socket_data(net, self.LLDP_ETHER_PROTO, self._config.lldp_capture_timeout, use_cache=True)
         if packet:
             if str(packet) == "TimeoutError":
-                msg = "NoLldpRcvd"
-                if self._config.show_warnings_and_errors is True:
-                    msg += self._config.error_sign
-                self.port_id = msg
-                self.system_name =  msg
-                self.system_description = msg
-                self.mgmt_addr = msg
+                self.lldp_err_msg("NoLldpRcvd", self._config.error_sign)
                 return
             else:
                 self.parse_lldp_packet(packet)
