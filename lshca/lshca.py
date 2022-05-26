@@ -2081,7 +2081,7 @@ def humanize_number(num, precision=1):
 
 def main():
     if os.geteuid() != 0:
-        exit("You need to have root privileges to run this script")
+        sys.exit("You need to have root privileges to run this script")
 
     config = Config()
     config.parse_arguments(sys.argv[1:])
