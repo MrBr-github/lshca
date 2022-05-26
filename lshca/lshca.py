@@ -1966,9 +1966,13 @@ class DataSource(object):
                     print('Socket could not be created. {}'.format(e))
                     sys.exit()
 
-            raw_socket.bind((interface, ether_proto))
-            self.interfaces_struct.append({"interface":interface, "socket": raw_socket})
-            self._set_interface_promisc_status(interface, raw_socket, True)
+            try:
+                raw_socket.bind((interface, ether_proto))
+                self.interfaces_struct.append({"interface":interface, "socket": raw_socket})
+                self._set_interface_promisc_status(interface, raw_socket, True)
+            except Exception as e:
+                print("Tried connecting interface '{}'".format(interface))
+                raise e
 
             signal.signal(signal.SIGINT, self.signal_recieved)
             signal.signal(signal.SIGALRM, self.signal_recieved)
