@@ -1885,7 +1885,7 @@ class DataSource(object):
                 f = open(file_to_read, "r")
                 try:
                     output = f.read()
-                except IOError as exception:
+                except (IOError, TypeError) as exception:
                     print("Driver error: failed to read {}".format(file_to_read), file=sys.stderr)
                     output = ""
                 except Exception as e:
