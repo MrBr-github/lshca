@@ -1,0 +1,6 @@
+- Bump script version
+- Bump setup.py version
+- Update CHANGELOG
+- Bump version git tag
+- Upload to PyPi
+- Deploy to NFSs
