@@ -52,7 +52,7 @@ class Config(object):
                     "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps", "PktSeqErr"],
                     "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
-                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode"]
+                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode", "BFBver"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -354,6 +354,7 @@ class Config(object):
                 NIC       - DPU behaves exactly like an adapter card from the perspective of the external host
                 Separated - network function is assigned to both the Arm cores and the x86 host cores. Traffic reaches both of them
                 Undefined - Failed to identify DPU operation mode
+         BFBver   - version of DPU BFB image. Works ONLY within the DPU os
 
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
@@ -368,6 +369,7 @@ class Config(object):
                      - if no bond device configured
         PhyAnalisys  - if no issue detected
         DPUmode      - if it has no value
+        BFBver       - if it has no value
         Whole BDF    - if it part of DPU and LnkStat is nop (unused BDFs)
 
         """)
@@ -605,10 +607,18 @@ class Output(object):
                 if hca.get("DPUmode") != "" and bdf_device["LnkStat"] == "nop":
                     bdfs_devices_for_removal.append(hca["bdf_devices"].index(bdf_device))
 
+            ### HCA wide filters below
             # ---- Remove DPUmode if it has no value
             if "DPUmode" in hca:
                 if hca["DPUmode"] != "":
                     remove_dpu_mode = False
+
+            # ---- Remove BFBver if it has no value and the HCA is not DPU
+            print(hca.get("DPUmode"))
+            print(hca.get("BFBver"))
+
+            if hca.get("DPUmode") == "" and hca.get("BFBver") == "":
+                hca_fields_for_removal.append("BFBver")
 
             if remove_sriov_and_parent:
                 hca_fields_for_removal.append("SRIOV")
@@ -1364,6 +1374,13 @@ class MiscCMDs(object):
         else:
             return "N/A"
 
+    def get_bfb_version(self):
+        try:
+            f = open("/etc/mlnx-release", "r")
+            return f.read().strip()
+        except FileNotFoundError:
+            return ""
+
 
 class MlnxBDFDevice(object):
     def __init__(self, bdf, data_source, config, port=1):
@@ -1469,6 +1486,7 @@ class MlnxBDFDevice(object):
         # ------ Misc ------
         self.tempr = self._miscDevice.get_tempr(self.rdma)
         self.driver_ver = self._miscDevice.get_driver_ver()
+        self.bfb_ver = self._miscDevice.get_bfb_version()
 
         # ------ SA/SMP query ------
         if self._config.sa_smp_query_device_enabled:
@@ -1675,6 +1693,7 @@ class MlnxHCA(object):
         self.description = bdf_dev.description
         self.tempr = bdf_dev.tempr
         self.dpu_mode = bdf_dev.dpu_mode
+        self.bfb_ver = bdf_dev.bfb_ver
         self._hca_index = None
 
     def __repr__(self):
@@ -1710,6 +1729,7 @@ class MlnxHCA(object):
                   "Tempr": self.tempr,
                   "Dev": self.hca_index,
                   "DPUmode": self.dpu_mode,
+                  "BFBver": self.bfb_ver,
                   "bdf_devices": []}
         for bdf_dev in self.bdf_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
