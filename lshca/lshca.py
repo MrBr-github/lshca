@@ -51,7 +51,8 @@ class Config(object):
                               "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
                     "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps", "PktSeqErr"],
                     "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
-                             "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"]
+                             "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
+                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -63,7 +64,7 @@ class Config(object):
         self.record_dir = "/tmp/lshca"
         self.record_tar_file = None
 
-        self.ver = "3.7"
+        self.ver = "3.8"
 
         self.mst_device_enabled = False
         self.sa_smp_query_device_enabled = False
@@ -114,7 +115,7 @@ class Config(object):
                               normal - list HCAs
                               record - record all data for debug and lists HCAs\
                             '''))
-        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'traffic', 'lldp', 'all'], default='system', dest="view",
+        parser.add_argument('-w', choices=['system', 'ib', 'roce', 'cable', 'traffic', 'lldp', 'dpu', 'all'], default='system', dest="view",
                             help=textwrap.dedent('''\
                             show output view (default: %(default)s):
                               system  - (default). Show system oriented HCA info
@@ -124,6 +125,7 @@ class Config(object):
                                         Note: It takes time to display this view due to underling utils execution time.
                               traffic - Show port traffic
                               lldp    - Show lldp information.
+                              dpu     - Shou DPU (blueField) information
                               all     - Show all available HCA info. Aggregates all above views + MST data source.
                               Note: all human readable output views are elastic. See extended help for more info.
                             ''')
@@ -187,6 +189,8 @@ class Config(object):
             self.output_view = "traffic"
         elif args.view == "lldp":
             self.output_view = "lldp"
+        elif args.view == "dpu":
+            self.output_view = "dpu"
         elif args.view == "all":
             self.mst_device_enabled = True
             self.sa_smp_query_device_enabled = True
@@ -340,6 +344,16 @@ class Config(object):
           LLDPsysName   - Switch system name. LLDP TLV 5
           LLDPmgmtAddr  - Switch management IP address. LLDP TLV 8
           LLDPsysDescr  - Switch system description. Usualy contains Switch type, OS type and OS ver. LLDP TLV 6
+
+         DPU view
+          DPUmode - DPU mode of operation.
+            See link detailed explanations: https://docs.nvidia.com/networking/display/BlueFieldDPUOSLatest/Modes+of+Operation
+            Possible values:
+                ECPF      - the NIC resources and functionality are owned and controlled by the embedded Arm subsystem
+                RestrHost - ECPF with DPU controled ONLY via ARM subsystem
+                NIC       - DPU behaves exactly like an adapter card from the perspective of the external host
+                Separated - network function is assigned to both the Arm cores and the x86 host cores. Traffic reaches both of them
+                Undefined - Failed to identify DPU operation mode
 
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
@@ -540,6 +554,7 @@ class Output(object):
             remove_ip_stat = True
             remove_bond = True
             remove_phy_analisys = True
+            remove_dpu_mode = True
 
             for bdf_device in hca["bdf_devices"]:
                 # ---- Removing SRIOV and Parent_addr if no VFs present
@@ -583,6 +598,11 @@ class Output(object):
                     if bdf_device["PhyAnalisys"] != "No_issue" and bdf_device["PhyAnalisys"] != "":
                         remove_phy_analisys = False
 
+            # ---- Remove DPUmode if it has no value
+            if "DPUmode" in hca:
+                if hca["DPUmode"] != "":
+                    remove_dpu_mode = False
+
             if remove_sriov_and_parent:
                 hca_fields_for_removal.append("SRIOV")
                 hca_fields_for_removal.append("Parent_addr")
@@ -600,6 +620,8 @@ class Output(object):
                 hca_fields_for_removal.append("BondMiiStat")
             if remove_phy_analisys:
                 hca_fields_for_removal.append("PhyAnalisys")
+            if remove_dpu_mode:
+                hca_fields_for_removal.append("DPUmode")
 
             for field in hca_fields_for_removal:
                 if field in hca:
@@ -806,10 +828,10 @@ class PCIDevice(object):
         self._data_source = data_source
 
     def get_data(self):
-        self._data = self._data_source.exec_shell_cmd("lspci -vvvD -s" + self._bdf, use_cache=True)
+        self._data = self._data_source.exec_shell_cmd("lspci -vvvDnn -s" + self._bdf, use_cache=True)
         # Handling following string, taking reset of string after HCA type
         # 0000:01:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
-        self.description = self.get_info_from_lspci_data("^[0-9].*", str(self._bdf) + ".*:(.+)")
+        self.description = self.get_info_from_lspci_data("^[0-9].*", str(self._bdf) + "[^:]+: (.+?)(?= \[[a-f0-9]{4}:[a-f0-9]{4}\]|$)")
         self.sn = self.get_info_from_lspci_data("\[SN\].*", ".*:(.+)")
         self._pn = self.get_info_from_lspci_data("\[PN\].*", ".*:(.+)")
         self.revision = self.get_info_from_lspci_data("\[EC\].*", ".*:(.+)")
@@ -819,6 +841,7 @@ class PCIDevice(object):
         self._lnkStaSpeed = self.get_info_from_lspci_data("LnkSta:.*Speed.*", ".*Speed ([0-9]+)")
         self._pciGen = self.get_info_from_lspci_data(".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn].*",
                                             ".*[Pp][Cc][Ii][Ee] *[Gg][Ee][Nn]([0-9]) +")
+        self.pci_device_id = self.get_info_from_lspci_data("^[0-9].*", str(self._bdf) + ".*\[([a-f0-9]{4}:[a-f0-9]{4})\]")
 
         # self._pciGen and below speed IF statements here for backward compatibility of regression
         # they can be safely removed if all recorded sources will contain Speed
@@ -1237,6 +1260,48 @@ class MlxLink(object):
                     if self.physical_link_recommendation == "No_issue_was_observed.":
                         self.physical_link_recommendation = "No_issue"
 
+class MlxConfig(object):
+    def __init__(self, data_source):
+        self._data_source = data_source
+
+        self.internal_cpu_model = ""
+        self.internal_cpu_page_supplier = ""
+        self.internal_cpu_eswitch_manager = ""
+        self.internal_cpu_cpu_ib_vport0 = ""
+        self.internal_cpu_offload_engine = "    "
+
+    def get_data(self, mst_device):
+        if mst_device == "":
+            return
+
+        # all of MST devices on single HCA point to the same configuration source
+        # this will reduce execution time
+        normalised_mst_device = re.sub(r'(.*)\.[0-9]', r'\1', mst_device)
+
+        data = self._data_source.exec_shell_cmd("mlxconfig -d {} q".format(normalised_mst_device), use_cache=True)
+        self.internal_cpu_model = search_in_list_and_extract_by_regex(data, r'.*INTERNAL_CPU_MODEL.*', r'.*\((.*)\)')
+        self.internal_cpu_page_supplier = search_in_list_and_extract_by_regex(data, r'.*INTERNAL_CPU_PAGE_SUPPLIER.*', r'.*\((.*)\)')
+        self.internal_cpu_eswitch_manager = search_in_list_and_extract_by_regex(data, r'.*INTERNAL_CPU_ESWITCH_MANAGER.*', r'.*\((.*)\)')
+        self.internal_cpu_cpu_ib_vport0 = search_in_list_and_extract_by_regex(data, r'.*INTERNAL_CPU_IB_VPORT0.*', r'.*\((.*)\)')
+        self.internal_cpu_offload_engine = search_in_list_and_extract_by_regex(data, r'.*INTERNAL_CPU_OFFLOAD_ENGINE.*', r'.*\((.*)\)')
+
+class MlxPrivHost(object):
+    def __init__(self, data_source):
+        self._data_source = data_source
+
+        self.restric_level = ""
+
+    def get_data(self, mst_device):
+        if mst_device == "":
+            return
+
+        # all of MST devices on single HCA point to the same configuration source
+        # this will reduce execution time
+        normalised_mst_device = re.sub(r'(.*)\.[0-9]', r'\1', mst_device)
+
+        data = self._data_source.exec_shell_cmd("mlxprivhost -d {} q".format(normalised_mst_device), use_cache=True)
+        tmp = search_in_list_and_extract_by_regex(data, r'^level +: [A-Z]+', r'.*: ([A-Z]+)')
+        self.restric_level = tmp.lower()
 
 class MiscCMDs(object):
     def __init__(self, data_source, config):
@@ -1299,6 +1364,8 @@ class MlnxBDFDevice(object):
         self._mstDevice = MSTDevice(self._data_source, self._config)
         self._mlxLink = MlxLink(self._data_source)
         self._mlxCable = MlxCable(self._data_source)
+        self._mlxConfig = MlxConfig(self._data_source)
+        self._mlxPrivHost = MlxPrivHost(self._data_source)
         self._miscDevice = MiscCMDs(self._data_source, self._config)
         self._sasmpQueryDevice = SaSmpQueryDevice(self._data_source, self._config)
         self._lldpData = LldpData(self._data_source, self._config)
@@ -1339,6 +1406,7 @@ class MlnxBDFDevice(object):
         self.description = self._pciDevice.description
         self.lnkCapWidth = self._pciDevice.lnkCapWidth
         self.lnkStaWidth = self._pciDevice.lnkStaWidth
+        self.pci_device_id = self._pciDevice.pci_device_id
 
         if self.sriov == "VF":
             self.lnkCapWidth = ""
@@ -1347,7 +1415,10 @@ class MlnxBDFDevice(object):
         self.sn = self._pciDevice.sn
 
         # ------ MST ------
-        if self._config.output_view == "cable" or self._config.mst_device_enabled or self._config.output_view == "all":
+        if self._config.output_view == "cable" or \
+          self._config.output_view == "dpu" or \
+          self._config.mst_device_enabled or \
+          self._config.output_view == "all":
             self._mstDevice.init_mst_service()
             self._mstDevice.get_data(self.bdf)
             if "MST_device" not in self._config.output_order:
@@ -1368,6 +1439,20 @@ class MlnxBDFDevice(object):
         self.cable_length = self._mlxCable.cable_length
         self.cable_pn = self._mlxCable.cable_pn
         self.cable_sn = self._mlxCable.cable_sn
+
+        # ------ MLX Config ------
+        if self._is_dpu() and (self._config.output_view == "dpu" or self._config.output_view == "all"):
+            self._mlxConfig.get_data(self.mst_device)
+        self.internal_cpu_model = self._mlxConfig.internal_cpu_model
+        self.internal_cpu_page_supplier = self._mlxConfig.internal_cpu_page_supplier
+        self.internal_cpu_eswitch_manager = self._mlxConfig.internal_cpu_eswitch_manager
+        self.internal_cpu_cpu_ib_vport0 = self._mlxConfig.internal_cpu_cpu_ib_vport0
+        self.internal_cpu_offload_engine = self._mlxConfig.internal_cpu_offload_engine
+
+        # ------ MLX PrivHost ------
+        if self._is_dpu() and (self._config.output_view == "dpu" or self._config.output_view == "all"):
+            self._mlxPrivHost.get_data(self.mst_device)
+        self.restric_level = self._mlxPrivHost.restric_level
 
         # ------ Misc ------
         self.tempr = self._miscDevice.get_tempr(self.rdma)
@@ -1404,6 +1489,14 @@ class MlnxBDFDevice(object):
         self.llpd_system_description = self._lldpData.system_description
         self.llpd_mgmt_addr = self._lldpData.mgmt_addr
 
+    def _is_dpu(self):
+        # This function decides on well known Mellanox PCI ids taken from the https://pci-ids.ucw.cz/read/PC/15b3
+        # it comes to eliminate usage of slow mlxconfig and mlxprivhost utils on non dpu HCAs
+        # all BF DPUs start with a2xx or c2xx
+        if self.pci_device_id.startswith("15b3:a2") or self.pci_device_id.startswith("15b3:c2"):
+            return True
+        else:
+            return False
 
     def __repr__(self):
         return self._sysFSDevice.__repr__() + "\n" + self._pciDevice.__repr__() + "\n" + \
@@ -1471,6 +1564,32 @@ class MlnxBDFDevice(object):
                 return retval + self._config.warning_sign
 
         return retval
+
+    @property
+    def dpu_mode(self):
+        if not self._is_dpu():
+            return ""
+
+        mode = "Undefined"
+
+        if self.internal_cpu_model == "1":
+            if self.internal_cpu_page_supplier == "1" and \
+              self.internal_cpu_eswitch_manager == "1" and \
+              self.internal_cpu_cpu_ib_vport0 == "1" and \
+              self.internal_cpu_offload_engine == "1":
+                mode = "NIC"
+            elif self.internal_cpu_page_supplier == "0" and \
+              self.internal_cpu_eswitch_manager == "0" and \
+              self.internal_cpu_cpu_ib_vport0 == "0" and \
+              self.internal_cpu_offload_engine == "0":
+                if self.restric_level == "privileged":
+                    mode = "ECPF"
+                elif self.restric_level == "restricted":
+                    mode = "RestrHost"
+        elif self.internal_cpu_model == "0":
+            mode = "Separated"
+
+        return mode
 
     def get_traff(self):
         self.sysFSDevice.get_traffic()
@@ -1543,6 +1662,7 @@ class MlnxHCA(object):
         self.sys_image_guid = bdf_dev.sys_image_guid
         self.description = bdf_dev.description
         self.tempr = bdf_dev.tempr
+        self.dpu_mode = bdf_dev.dpu_mode
         self._hca_index = None
 
     def __repr__(self):
@@ -1577,6 +1697,7 @@ class MlnxHCA(object):
                   "Desc": self.description,
                   "Tempr": self.tempr,
                   "Dev": self.hca_index,
+                  "DPUmode": self.dpu_mode,
                   "bdf_devices": []}
         for bdf_dev in self.bdf_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
