@@ -367,7 +367,7 @@ class Config(object):
         Bond, BondState, BondMiiStat
                      - if no bond device configured
         PhyAnalisys  - if no issue detected
-
+        DPUmode      - if it has no value
         Whole BDF    - if it part of DPU and LnkStat is nop (unused BDFs)
 
         """)
