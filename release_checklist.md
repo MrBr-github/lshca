@@ -1,6 +1,10 @@
 - Bump script version
 - Bump setup.py version
 - Update CHANGELOG
+- Update extended help
 - Bump version git tag
 - Upload to PyPi
 - Deploy to NFSs
+- Update WIKI
+  - Extended help
+  - Features overview
