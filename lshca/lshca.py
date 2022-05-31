@@ -368,6 +368,8 @@ class Config(object):
                      - if no bond device configured
         PhyAnalisys  - if no issue detected
 
+        Whole BDF    - if it part of DPU and LnkStat is nop (unused BDFs)
+
         """)
         print(extended_help)
         sys.exit(0)
@@ -547,6 +549,7 @@ class Output(object):
     def elastic_output(self):
         for hca in self.output:
             hca_fields_for_removal = []
+            bdfs_devices_for_removal = []
             remove_sriov_and_parent = True
             remove_lnk_sta_width = True
             remove_port = True
@@ -598,6 +601,10 @@ class Output(object):
                     if bdf_device["PhyAnalisys"] != "No_issue" and bdf_device["PhyAnalisys"] != "":
                         remove_phy_analisys = False
 
+                # ---- Remove whole BDF device if it part of DPU and LnkStat is nop
+                if hca["DPUmode"] != "" and bdf_device["LnkStat"] == "nop":
+                    bdfs_devices_for_removal.append(hca["bdf_devices"].index(bdf_device))
+
             # ---- Remove DPUmode if it has no value
             if "DPUmode" in hca:
                 if hca["DPUmode"] != "":
@@ -629,6 +636,11 @@ class Output(object):
                 for bdf_device in hca["bdf_devices"]:
                     if field in bdf_device:
                         del bdf_device[field]
+
+        bdfs_devices_for_removal.sort(reverse=True)
+        for index in bdfs_devices_for_removal:
+            del hca["bdf_devices"][index]
+
 
     def filter_out_data(self):
         self.apply_where_output_filters()
