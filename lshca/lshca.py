@@ -602,7 +602,7 @@ class Output(object):
                         remove_phy_analisys = False
 
                 # ---- Remove whole BDF device if it part of DPU and LnkStat is nop
-                if hca["DPUmode"] != "" and bdf_device["LnkStat"] == "nop":
+                if hca.get("DPUmode") != "" and bdf_device["LnkStat"] == "nop":
                     bdfs_devices_for_removal.append(hca["bdf_devices"].index(bdf_device))
 
             # ---- Remove DPUmode if it has no value
