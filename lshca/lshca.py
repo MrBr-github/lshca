@@ -1450,7 +1450,7 @@ class MlnxBDFDevice(object):
           self._config.output_view == "all":
             self._mstDevice.init_mst_service()
             self._mstDevice.get_data(self.bdf)
-            if "MST_device" not in self._config.output_order:
+            if self._config.output_view != "dpu" and "MST_device" not in self._config.output_order:
                 self._config.output_order.append("MST_device")
         self.mst_device = self._mstDevice.mst_device
         self.mst_cable = self._mstDevice.mst_cable
