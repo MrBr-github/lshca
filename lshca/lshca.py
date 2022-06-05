@@ -52,7 +52,8 @@ class Config(object):
                     "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps", "PktSeqErr"],
                     "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
-                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode", "BFBver"]
+                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode", "BFBver", "OvsBrdg",
+                             "UplnkRepr", "PfRepr", "VfRepr"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -1325,6 +1326,48 @@ class MlxPrivHost(object):
         tmp = search_in_list_and_extract_by_regex(data, r'^level +: [A-Z]+', r'.*: ([A-Z]+)')
         self.restric_level = tmp.lower()
 
+class OvsVsctl(object):
+    def __init__(self, data_source):
+        self._data_source = data_source
+
+        self.ovs_bridge = ""
+        self.uplnk_repr = ""
+        self.pf_repr = ""
+        self.vf_repr = ""
+
+    def get_data(self, net):
+        data = {}
+        ovsvctl_list_br = self._data_source.exec_shell_cmd("ovs-vsctl list-br", use_cache=True)
+        for bridge in ovsvctl_list_br:
+            ovsvctl_list_ports = self._data_source.exec_shell_cmd("ovs-vsctl list-ports {}".format(bridge), use_cache=True)
+            data[bridge] = ovsvctl_list_ports
+
+        ovs_bridge = ""
+        uplnk_repr = ""
+        pf_repr = ""
+        vf_repr = ""
+
+        for bridge in data:
+            bridge_found = False
+            ovs_bridge = bridge
+            for port in data[bridge]:
+                if port == net:
+                    bridge_found = True
+                if re.match(r"^p\d+$", port):
+                    uplnk_repr = port
+                if re.match(r"^pf\d+hpf$", port):
+                    pf_repr = port
+                if re.match(r"^pf\d+vf\d+$", port):
+                    vf_repr = port
+            if bridge_found:
+                break
+
+        if bridge_found:
+            self.ovs_bridge = ovs_bridge
+            self.uplnk_repr = uplnk_repr
+            self.pf_repr = pf_repr
+            self.vf_repr = vf_repr
+
 class MiscCMDs(object):
     def __init__(self, data_source, config):
         self.data_source = data_source
@@ -1395,6 +1438,7 @@ class MlnxBDFDevice(object):
         self._mlxCable = MlxCable(self._data_source)
         self._mlxConfig = MlxConfig(self._data_source)
         self._mlxPrivHost = MlxPrivHost(self._data_source)
+        self._ovsVsctl = OvsVsctl(self._data_source)
         self._miscDevice = MiscCMDs(self._data_source, self._config)
         self._sasmpQueryDevice = SaSmpQueryDevice(self._data_source, self._config)
         self._lldpData = LldpData(self._data_source, self._config)
@@ -1504,6 +1548,14 @@ class MlnxBDFDevice(object):
             self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
             self.packet_seq_err_per_sec = self._sysFSDevice.packet_seq_err_per_sec
 
+        # ------ OVS Vctl ------
+        if self._inside_dpu() and (self._config.output_view == "dpu" or self._config.output_view == "all"):
+            self._ovsVsctl.get_data(self.net)
+        self.ovs_bridge = self._ovsVsctl.ovs_bridge
+        self.pf_repr = self._ovsVsctl.pf_repr
+        self.vf_repr = self._ovsVsctl.vf_repr
+        self.uplnk_repr = self._ovsVsctl.uplnk_repr
+
         # ------ LLDP ------
         if ( self._config.output_view == "lldp" or self._config.output_view == "all" ) and \
             self.net != self.bond_master and \
@@ -1524,6 +1576,13 @@ class MlnxBDFDevice(object):
         # it comes to eliminate usage of slow mlxconfig and mlxprivhost utils on non dpu HCAs
         # all BF DPUs start with a2xx or c2xx
         if self.pci_device_id.startswith("15b3:a2") or self.pci_device_id.startswith("15b3:c2"):
+            return True
+        else:
+            return False
+
+    def _inside_dpu(self):
+        # This function decides if current script runs on DPU or on Host
+        if self.bfb_ver != "":
             return True
         else:
             return False
@@ -1669,7 +1728,11 @@ class MlnxBDFDevice(object):
                   "LLDPportId": self.llpd_port_id,
                   "LLDPsysName": self.llpd_system_name,
                   "LLDPsysDescr": self.llpd_system_description,
-                  "LLDPmgmtAddr": self.llpd_mgmt_addr
+                  "LLDPmgmtAddr": self.llpd_mgmt_addr,
+                  "OvsBrdg" : self.ovs_bridge,
+                  "PfRepr" : self.pf_repr,
+                  "VfRepr" : self.vf_repr,
+                  "UplnkRepr" : self.uplnk_repr
                   }
         return output
 
