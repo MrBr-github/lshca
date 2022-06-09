@@ -53,7 +53,7 @@ class Config(object):
                     "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
                     "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode", "BFBver", "OvsBrdg",
-                             "UplnkRepr", "PfRepr", "VfRepr"]
+                             "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
