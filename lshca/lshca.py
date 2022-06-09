@@ -1422,6 +1422,8 @@ class MlnxBDFDevice(object):
         self._config = config
         self._data_source = data_source
 
+        self._inside_dpu = False
+
         self._sysFSDevice = SYSFSDevice(self.bdf, self._data_source, self._config, port)
         self._pciDevice = PCIDevice(self.bdf, self._data_source, self._config)
         self._mstDevice = MSTDevice(self._data_source, self._config)
@@ -1435,6 +1437,8 @@ class MlnxBDFDevice(object):
         self._lldpData = LldpData(self._data_source, self._config)
 
     def get_data(self):
+        self._get_if_inside_dpu(self._data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True))
+
         # ------ SysFS ------
         self._sysFSDevice.get_data()
         self.fw = self._sysFSDevice.fw
@@ -1540,7 +1544,7 @@ class MlnxBDFDevice(object):
             self.packet_seq_err_per_sec = self._sysFSDevice.packet_seq_err_per_sec
 
         # ------ OVS Vctl ------
-        if self._inside_dpu() and (self._config.output_view == "dpu" or self._config.output_view == "lldp" or self._config.output_view == "all"):
+        if self._inside_dpu and (self._config.output_view == "dpu" or self._config.output_view == "lldp" or self._config.output_view == "all"):
             self._ovsVsctl.get_data(self.net)
         self.ovs_bridge = self._ovsVsctl.ovs_bridge
         self.pf_repr = self._ovsVsctl.pf_repr
@@ -1555,7 +1559,7 @@ class MlnxBDFDevice(object):
             # Handle second interface in the bond, it has no self.link_layer value
             ( self.sriov == "PF" and self.bond_master != "=N/A=" and self.bond_master != "") \
           ):
-            if self._inside_dpu() and self.uplnk_repr:
+            if self._inside_dpu and self.uplnk_repr:
                 self._lldpData.get_data(self.uplnk_repr, self.ip_state)
             else:
                 self._lldpData.get_data(self.net, self.ip_state)
@@ -1574,12 +1578,13 @@ class MlnxBDFDevice(object):
         else:
             return False
 
-    def _inside_dpu(self):
-        # This function decides if current script runs on DPU or on Host
-        if self.bfb_ver != "":
-            return True
-        else:
-            return False
+    def _get_if_inside_dpu(self, pci_tree):
+        for bdf in pci_tree:
+            result = extract_string_by_regex(bdf, "(0000:00:00.0) (.+)")
+            if result != "=N/A=":
+                self._inside_dpu = True
+                return
+
 
     def __repr__(self):
         return self._sysFSDevice.__repr__() + "\n" + self._pciDevice.__repr__() + "\n" + \
