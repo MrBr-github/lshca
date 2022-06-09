@@ -371,7 +371,10 @@ class Config(object):
         PhyAnalisys  - if no issue detected
         DPUmode      - if it has no value
         BFBver       - if it has no value
+        LLDPportId, LLDPsysName, LLDPmgmtAddr, LLDPsysDescr
+                     - if the interface is not Ethernet
         Whole BDF    - if it part of DPU and LnkStat is nop (unused BDFs)
+
 
         """)
         print(extended_help)
@@ -572,7 +575,11 @@ class Output(object):
             bfb_fields_to_remove["BondMiiStat"] = True
             # ---- Remove PhyAnalisys if there are no issues
             bfb_fields_to_remove["PhyAnalisys"] = True
-            # ---- Remove DPUmode if it has no value
+            # ---- Remove LLDP fields if the interface in not Eth
+            bfb_fields_to_remove["LLDPportId"] = True
+            bfb_fields_to_remove["LLDPsysName"] = True
+            bfb_fields_to_remove["LLDPmgmtAddr"] = True
+            bfb_fields_to_remove["LLDPsysDescr"] = True
 
             for bdf_device in hca["bdf_devices"]:
                 # ---- Removing SRIOV and Parent_addr if no VFs present
@@ -616,6 +623,13 @@ class Output(object):
                 # ---- Remove whole BDF device if it part of DPU and LnkStat is nop
                 if hca.get("DPUmode") != "" and bdf_device["LnkStat"] == "nop":
                     bdf_devices_to_remove.append(hca["bdf_devices"].index(bdf_device))
+
+                # ---- Remove LLDP fields if the interface in not Eth
+                if bdf_device.get("Link") == "Eth":
+                    bfb_fields_to_remove["LLDPportId"] = False
+                    bfb_fields_to_remove["LLDPsysName"] = False
+                    bfb_fields_to_remove["LLDPmgmtAddr"] = False
+                    bfb_fields_to_remove["LLDPsysDescr"] = False
 
 
             for field,do_remove in bfb_fields_to_remove.items():
