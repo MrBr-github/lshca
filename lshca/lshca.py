@@ -1540,7 +1540,7 @@ class MlnxBDFDevice(object):
             self.packet_seq_err_per_sec = self._sysFSDevice.packet_seq_err_per_sec
 
         # ------ OVS Vctl ------
-        if self._inside_dpu() and (self._config.output_view == "dpu" or self._config.output_view == "all"):
+        if self._inside_dpu() and (self._config.output_view == "dpu" or self._config.output_view == "lldp" or self._config.output_view == "all"):
             self._ovsVsctl.get_data(self.net)
         self.ovs_bridge = self._ovsVsctl.ovs_bridge
         self.pf_repr = self._ovsVsctl.pf_repr
@@ -1555,7 +1555,10 @@ class MlnxBDFDevice(object):
             # Handle second interface in the bond, it has no self.link_layer value
             ( self.sriov == "PF" and self.bond_master != "=N/A=" and self.bond_master != "") \
           ):
-            self._lldpData.get_data(self.net, self.ip_state)
+            if self._inside_dpu() and self.uplnk_repr:
+                self._lldpData.get_data(self.uplnk_repr, self.ip_state)
+            else:
+                self._lldpData.get_data(self.net, self.ip_state)
 
         self.llpd_port_id = self._lldpData.port_id
         self.llpd_system_name =  self._lldpData.system_name
@@ -1920,17 +1923,26 @@ class LldpData:
         # Packet example
         # (b'\x01\x80\xc2\x00\x00\x0e\xb8Y\x9f\xa9\x9c`\x88\xcc\x02\x07\x04\xb8Y\x9f\xa9\x9c\x00\x04\x07\x05Eth1/1\x06\x02\x00x\x08\x01 \n\tanc-dx-t1\x0c\x18MSN3700,Onyx,SWv3.9.0914\x0e\x04\x00\x14\x00\x04\x10\x16\x05\x01\n\x90\xfc\x85\x02\x00\x00\x00\x00\n+\x06\x01\x02\x01\x02\x02\x01\x01\x00\xfe\x19\x00\x80\xc2\t\x08\x00\x03\x00`2\x00\x002\x00\x00\x00\x00\x02\x02\x02\x02\x02\x02\x00\x02\xfe\x19\x00\x80\xc2\n\x00\x00\x03\x00`2\x00\x002\x00\x00\x00\x00\x02\x02\x02\x02\x02\x02\x00\x02\xfe\x06\x00\x80\xc2\x0b\x08\x08\xfe\x08\x00\x80\xc2\x0c\x00c\x12\xb7\x00\x00', ('ens1f0', 35020, 2, 1, b'\xb8Y\x9f\xa9\x9c`'))
         if rcvd_packet:
-            packet = rcvd_packet[0] # taking the binary part of the tuple
+            payload = rcvd_packet[0] # taking the binary part of the tuple
+            meta = rcvd_packet[1]
         else:
+            return
+
+        # DEBUG
+        print(meta[0])
+        print(self._interface)
+
+        if meta[0] != self._interface:
+            self.lldp_err_msg("InterfaceMismatch", self._config.error_sign)
             return
 
         ether_payload = None
         # this loop comes to skip vlan and similar encapsulation headers.
         # By RFC they should not exist in LLDP packes, but in reality they do in some cases.
         for i in range(12, 50):
-            ether_type = struct.unpack("!H", packet[i:(i + 2)])[0]
+            ether_type = struct.unpack("!H", payload[i:(i + 2)])[0]
             if hex(ether_type) == hex(self.LLDP_ETHER_PROTO):
-                ether_payload = packet[(i + 2):] # Eternet payload starts after Ether type
+                ether_payload = payload[(i + 2):] # Eternet payload starts after Ether type
                 break
         if ether_payload == None:
             print("Failed to parce ethernet frame. Exititng")
@@ -1985,7 +1997,7 @@ class LldpData:
 
         self._interface = net
 
-        if ip_state == "":
+        if ip_state == "" or net == "":
             self.lldp_err_msg("LnkStatUnclr", self._config.warning_sign)
             return
 
