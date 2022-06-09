@@ -1344,8 +1344,8 @@ class OvsVsctl(object):
         pf_repr = ""
         vf_repr = ""
 
+        bridge_found = False
         for bridge in data:
-            bridge_found = False
             ovs_bridge = bridge
             for port in data[bridge]:
                 if port == net:
