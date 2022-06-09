@@ -615,9 +615,6 @@ class Output(object):
                     remove_dpu_mode = False
 
             # ---- Remove BFBver if it has no value and the HCA is not DPU
-            print(hca.get("DPUmode"))
-            print(hca.get("BFBver"))
-
             if hca.get("DPUmode") == "" and hca.get("BFBver") == "":
                 hca_fields_for_removal.append("BFBver")
 
