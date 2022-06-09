@@ -1933,10 +1933,6 @@ class LldpData:
         else:
             return
 
-        # DEBUG
-        print(meta[0])
-        print(self._interface)
-
         if meta[0] != self._interface:
             self.lldp_err_msg("InterfaceMismatch", self._config.error_sign)
             return
