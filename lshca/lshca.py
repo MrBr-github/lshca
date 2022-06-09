@@ -551,103 +551,97 @@ class Output(object):
 
     def elastic_output(self):
         for hca in self.output:
-            hca_fields_for_removal = []
-            bdfs_devices_for_removal = []
-            remove_sriov_and_parent = True
-            remove_lnk_sta_width = True
-            remove_port = True
-            remove_lnk_stat = True
-            remove_ip_stat = True
-            remove_bond = True
-            remove_phy_analisys = True
-            remove_dpu_mode = True
+            hca_fields_to_remove = {}
+            bfb_fields_to_remove = {}
+            bdf_devices_to_remove = []
+
+            # ---- Removing SRIOV and Parent_addr if no VFs present
+            bfb_fields_to_remove["SRIOV"] = True
+            bfb_fields_to_remove["Parent_addr"] = True
+            # ---- Remove LnkStaWidth if it matches LnkCapWidth
+            bfb_fields_to_remove["LnkStaWidth"] = True
+            # ---- Remove Port if all values are 1
+            bfb_fields_to_remove["Port"] = True
+            # ---- Remove IpStat if all LnkStat are down
+            bfb_fields_to_remove["IpStat"] = True
+            # ---- Remove LnkStat if all are actv
+            bfb_fields_to_remove["LnkStat"] = True
+            # ---- Remove bond related fields if no bond configured
+            bfb_fields_to_remove["Bond"] = True
+            bfb_fields_to_remove["BondState"] = True
+            bfb_fields_to_remove["BondMiiStat"] = True
+            # ---- Remove PhyAnalisys if there are no issues
+            bfb_fields_to_remove["PhyAnalisys"] = True
+            # ---- Remove DPUmode if it has no value
 
             for bdf_device in hca["bdf_devices"]:
                 # ---- Removing SRIOV and Parent_addr if no VFs present
-                if "SRIOV" in bdf_device:
-                    if bdf_device["SRIOV"].strip() != "PF" and \
-                            bdf_device["SRIOV"].strip() != "PF" + self.config.warning_sign:
-                        remove_sriov_and_parent = False
+                if bdf_device.get("SRIOV") and bdf_device.get("SRIOV").strip() != "PF" and \
+                  bdf_device.get("SRIOV").strip() != "PF" + self.config.warning_sign:
+                    bfb_fields_to_remove["SRIOV"] = False
+                    bfb_fields_to_remove["Parent_addr"] = False
 
                 # ---- Remove LnkStaWidth if it matches LnkCapWidth
-                if "LnkStaWidth" in bdf_device:
-                    field_value = bdf_device["LnkStaWidth"].strip()
+                if bdf_device.get("LnkStaWidth"):
+                    field_value = bdf_device.get("LnkStaWidth").strip()
                     if re.search(re.escape(self.config.error_sign) + "$", field_value) or \
                             re.search(re.escape(self.config.warning_sign) + "$", field_value):
-                        remove_lnk_sta_width = False
+                        bfb_fields_to_remove["LnkStaWidth"] = False
 
                 # ---- Remove Port if all values are 1
-                if "Port" in bdf_device:
-                    if bdf_device["Port"].strip() != "1":
-                        remove_port = False
+                if bdf_device.get("Port") and bdf_device.get("Port").strip() != "1":
+                    bfb_fields_to_remove["Port"] = False
 
                 # ---- Remove IpStat if all LnkStat are down
-                if "LnkStat" in bdf_device:
-                    if bdf_device["LnkStat"].strip() != "down":
-                        remove_ip_stat = False
+                if bdf_device.get("LnkStat") and bdf_device.get("LnkStat").strip() != "down":
+                    bfb_fields_to_remove["IpStat"] = False
 
                 # ---- Remove LnkStat if all are actv
-                if "LnkStat" in bdf_device:
-                    if ( bdf_device["LnkStat"].strip() != "actv" and ( bdf_device.get("Bond") == "" or bdf_device.get("Bond") == "=N/A=" ) ) or \
-                    ( bdf_device["LnkStat"].strip() != "" and \
-                        ( bdf_device.get("Bond") != "" and \
-                                bdf_device.get("Bond") != "=N/A=" ) ):
-                        remove_lnk_stat = False
+                if bdf_device.get("LnkStat") and ( \
+                  ( bdf_device.get("LnkStat").strip() != "actv" and ( bdf_device.get("Bond") == "" or bdf_device.get("Bond") == "=N/A=" ) ) or \
+                  ( bdf_device.get("LnkStat").strip() != "" and ( bdf_device.get("Bond") != "" and bdf_device.get("Bond") != "=N/A=" ) )
+                  ):
+                    bfb_fields_to_remove["LnkStat"] = False
 
                 # ---- Remove bond related fields if no bond configured
-                if "Bond" in bdf_device:
-                    if bdf_device["Bond"].strip() and bdf_device["Bond"].strip() != "=N/A=":
-                        remove_bond = False
+                if bdf_device.get("Bond") and bdf_device.get("Bond").strip() != "=N/A=":
+                    bfb_fields_to_remove["Bond"] = False
+                    bfb_fields_to_remove["BondState"] = False
+                    bfb_fields_to_remove["BondMiiStat"] = False
 
                 # ---- Remove PhyAnalisys if there are no issues
-                if "PhyAnalisys" in bdf_device:
-                    if bdf_device["PhyAnalisys"] != "No_issue" and bdf_device["PhyAnalisys"] != "":
-                        remove_phy_analisys = False
+                if bdf_device.get("PhyAnalisys") and bdf_device.get("PhyAnalisys") != "No_issue":
+                    bfb_fields_to_remove["PhyAnalisys"] = False
 
                 # ---- Remove whole BDF device if it part of DPU and LnkStat is nop
                 if hca.get("DPUmode") != "" and bdf_device["LnkStat"] == "nop":
-                    bdfs_devices_for_removal.append(hca["bdf_devices"].index(bdf_device))
+                    bdf_devices_to_remove.append(hca["bdf_devices"].index(bdf_device))
+
+
+            for field,do_remove in bfb_fields_to_remove.items():
+                for bdf_device in hca["bdf_devices"]:
+                    if field in bdf_device and do_remove:
+                        del bdf_device[field]
+
 
             ### HCA wide filters below
             # ---- Remove DPUmode if it has no value
-            if "DPUmode" in hca:
-                if hca["DPUmode"] != "":
-                    remove_dpu_mode = False
+            if hca.get("DPUmode") == "":
+                hca_fields_to_remove["DPUmode"] = True
 
-            # ---- Remove BFBver if it has no value and the HCA is not DPU
-            if hca.get("DPUmode") == "" and hca.get("BFBver") == "":
-                hca_fields_for_removal.append("BFBver")
+                # ---- Remove BFBver if it has no value and the HCA is not DPU
+                if hca.get("BFBver") == "":
+                    hca_fields_to_remove["BFBver"] = True
 
-            if remove_sriov_and_parent:
-                hca_fields_for_removal.append("SRIOV")
-                hca_fields_for_removal.append("Parent_addr")
-            if remove_lnk_sta_width:
-                hca_fields_for_removal.append("LnkStaWidth")
-            if remove_port:
-                hca_fields_for_removal.append("Port")
-            if remove_ip_stat:
-                hca_fields_for_removal.append("IpStat")
-            if remove_lnk_stat:
-                hca_fields_for_removal.append("LnkStat")
-            if remove_bond:
-                hca_fields_for_removal.append("Bond")
-                hca_fields_for_removal.append("BondState")
-                hca_fields_for_removal.append("BondMiiStat")
-            if remove_phy_analisys:
-                hca_fields_for_removal.append("PhyAnalisys")
-            if remove_dpu_mode:
-                hca_fields_for_removal.append("DPUmode")
-
-            for field in hca_fields_for_removal:
-                if field in hca:
+            for field,do_remove in hca_fields_to_remove.items():
+                if field in hca and do_remove:
                     del hca[field]
-                for bdf_device in hca["bdf_devices"]:
-                    if field in bdf_device:
-                        del bdf_device[field]
 
-        bdfs_devices_for_removal.sort(reverse=True)
-        for index in bdfs_devices_for_removal:
-            del hca["bdf_devices"][index]
+
+            ### Remove filtered our BDFs
+            bdf_devices_to_remove.sort(reverse=True)
+            for index in bdf_devices_to_remove:
+                del hca["bdf_devices"][index]
 
 
     def filter_out_data(self):
