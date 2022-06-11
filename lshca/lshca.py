@@ -611,7 +611,7 @@ class Output(object):
                     bfb_fields_to_remove["LnkStat"] = False
 
                 # ---- Remove bond related fields if no bond configured
-                if bdf_device.get("Bond") and bdf_device.get("Bond").strip() != "=N/A=":
+                if bdf_device.get("Bond") and bdf_device.get("Bond").strip() != "=N/A=" and bdf_device.get("Bond").strip() != 'ovs-system':
                     bfb_fields_to_remove["Bond"] = False
                     bfb_fields_to_remove["BondState"] = False
                     bfb_fields_to_remove["BondMiiStat"] = False
