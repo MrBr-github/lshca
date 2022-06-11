@@ -20,7 +20,10 @@ class DataSourceRecorded(DataSource):
             f = open(file_to_read, "rb")
             output = pickle.load(f)
         except IOError:
-            if self.config.skip_missing:
+            if cmd and 'lspci -vvvDnn -s' in cmd:
+                altered_cmd = cmd.replace('lspci -vvvDnn -s', 'lspci -vvvD -s')
+                output = self.read_cmd_output_from_file(cmd_prefix, altered_cmd)
+            elif self.config.skip_missing:
                 output = ""
             else:
                 raise
