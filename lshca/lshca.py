@@ -416,7 +416,7 @@ class HCAManager(object):
             rdma_bond_bdf = None
 
             # Only first slave interface in a bond has infiniband information on his sysfs
-            if bdf_dev.bond_master != "=N/A=" and bdf_dev.rdma != "" :
+            if bdf_dev.bond_master != "=N/A=" and bdf_dev.bond_master != "ovs-system" and bdf_dev.rdma != "" :
                 rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, self._data_source, self._config)
                 rdma_bond_bdf.get_data()
 
