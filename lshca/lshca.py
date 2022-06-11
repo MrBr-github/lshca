@@ -1423,11 +1423,8 @@ class MiscCMDs(object):
             return "N/A"
 
     def get_bfb_version(self):
-        try:
-            f = open("/etc/mlnx-release", "r")
-            return f.read().strip()
-        except FileNotFoundError:
-            return ""
+        ver = self.data_source.read_file_if_exists("/etc/mlnx-release", use_cache=True)
+        return ver.strip()
 
 
 class MlnxBDFDevice(object):
