@@ -53,7 +53,7 @@ class Config(object):
                     "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
                     "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode", "BFBver", "OvsBrdg",
-                             "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr"]
+                             "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr", "SRIOV"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -287,9 +287,10 @@ class Config(object):
           Parent_addr   - BDF address of SRIOV parent Physical Function for this Virtual Function
           Rate          - Link rate in Gbit/s
                           On bond master, will show all slave speeds delimited by /
-          SRIOV         - SRIOV function type. Possible values:
+          SRIOV         - SRIOV and more function types. Possible values:
                             PF - Physical Function
                             VF - Virtual Function
+                            SF - Scalable Function
           Bond          - Name of Bond parent
           BondState     - On slave interface - status in a bond
                           On master interface - bonding policy appended by xmit hash policy if relevant
@@ -360,8 +361,8 @@ class Config(object):
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
         Following will be removed per HCA if the condition is True
-        SRIOV, Parent_addr
-                     - if there is no SRIOV VF
+        SRIOV        - if there are only PF
+        Parent_addr  - if there is no SRIOV VF
         LnkStaWidth  - if LnkStaWidth matches LnkCapWidth
         Port         - if all Port values are 1
         LnkStat      - if all LnkStat valuse are "actv"
@@ -406,6 +407,12 @@ class HCAManager(object):
                 bdf_dev.get_data()
                 mlnx_bdf_devices.append(bdf_dev)
 
+                for sf in bdf_dev.sf_list:
+                    sf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count, sf=sf)
+                    sf_dev.get_data()
+                    mlnx_bdf_devices.append(sf_dev)
+
+
                 if port_count >= len(bdf_dev.port_list):
                     break
 
@@ -423,7 +430,7 @@ class HCAManager(object):
                 bdf_dev.rdma = ""
                 bdf_dev.lnk_state = ""
 
-            if bdf_dev.sriov in ("PF", "PF" + self._config.warning_sign):
+            if bdf_dev.sriov in ("PF", "PF" + self._config.warning_sign, "SF"):
                 hca_found = False
                 for hca in self.mlnxHCAs:
                     if hca.sys_image_guid and bdf_dev.sys_image_guid == hca.sys_image_guid or \
@@ -441,6 +448,7 @@ class HCAManager(object):
                         hca = MlnxHCA(bdf_dev,  self._config)
                     hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
+
 
         # Now handle all VFs
         for bdf_dev in mlnx_bdf_devices:
@@ -586,7 +594,8 @@ class Output(object):
                 if bdf_device.get("SRIOV") and bdf_device.get("SRIOV").strip() != "PF" and \
                   bdf_device.get("SRIOV").strip() != "PF" + self.config.warning_sign:
                     bfb_fields_to_remove["SRIOV"] = False
-                    bfb_fields_to_remove["Parent_addr"] = False
+                    if bdf_device.get("SRIOV").strip() == "VF":
+                        bfb_fields_to_remove["Parent_addr"] = False
 
                 # ---- Remove LnkStaWidth if it matches LnkCapWidth
                 if bdf_device.get("LnkStaWidth"):
@@ -930,13 +939,18 @@ class PCIDevice(object):
 
 
 class SYSFSDevice(object):
-    def __init__(self, bdf, data_source, config, port=1):
+    def __init__(self, bdf, data_source, config, port=1, sf=""):
         self._bdf = bdf
         self._config = config
         self._data_source = data_source
         self._port = str(port)
 
         self._sys_prefix = "/sys/bus/pci/devices/" + self._bdf
+
+        self.is_sf = False
+        if sf:
+            self._sys_prefix += "/" + sf
+            self.is_sf = True
 
     def __repr__(self):
         delim = " "
@@ -955,8 +969,11 @@ class SYSFSDevice(object):
             self.sriov = "PF"
             self.vfParent = "-"
 
+        if self.is_sf:
+            self.sriov = "SF"
+
         self.numa = self._data_source.read_file_if_exists(self._sys_prefix + "/numa_node").rstrip()
-        if not self.numa:
+        if not self.numa and not self.is_sf:
             print("Warning: " + self._bdf + " has no NUMA assignment", file=sys.stderr)
 
         self.rdma = self._data_source.list_dir_if_exists(self._sys_prefix + "/infiniband/").rstrip()
@@ -1136,6 +1153,15 @@ class SYSFSDevice(object):
         self.traff_tx_bitps = "N/A"
         self.traff_rx_bitps = "N/A"
         self.packet_seq_err_per_sec = "N/A"
+
+        # Read the SF config only once
+        if self._port == "1":
+            tmp = self._data_source.list_dir_if_exists(self._sys_prefix ).rstrip().split()
+            self.sf_list = find_in_list(tmp, r'mlx5_core\.sf\.[0-9]+', return_only_first_group=False)
+            if not self.sf_list:
+                self.sf_list = []
+        else:
+            self.sf_list = []
 
     def get_traffic(self):
         # see https://community.mellanox.com/s/article/understanding-mlx5-linux-counters-and-status-parameters for more info about the counteres
@@ -1428,14 +1454,14 @@ class MiscCMDs(object):
 
 
 class MlnxBDFDevice(object):
-    def __init__(self, bdf, data_source, config, port=1):
+    def __init__(self, bdf, data_source, config, port=1, sf=""):
         self.bdf = bdf
         self._config = config
         self._data_source = data_source
 
         self._inside_dpu = False
 
-        self._sysFSDevice = SYSFSDevice(self.bdf, self._data_source, self._config, port)
+        self._sysFSDevice = SYSFSDevice(self.bdf, self._data_source, self._config, port, sf)
         self._pciDevice = PCIDevice(self.bdf, self._data_source, self._config)
         self._mstDevice = MSTDevice(self._data_source, self._config)
         self._mlxLink = MlxLink(self._data_source)
@@ -1479,6 +1505,7 @@ class MlnxBDFDevice(object):
         self.traff_tx_bitps = self._sysFSDevice.traff_tx_bitps
         self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
         self.packet_seq_err_per_sec = self._sysFSDevice.packet_seq_err_per_sec
+        self.sf_list = self._sysFSDevice.sf_list
 
         # ------ PCI ------
         self._pciDevice.get_data()
@@ -2283,12 +2310,15 @@ def extract_string_by_regex(data_string, regex, na_string="=N/A="):
     return search_result
 
 
-def find_in_list(list_to_search_in, regex_pattern):
+def find_in_list(list_to_search_in, regex_pattern, return_only_first_group=True):
     regex = re.compile(regex_pattern)
     result = [m.group(0) for l in list_to_search_in for m in [regex.search(l)] if m]
 
     if result:
-        return result[0]
+        if return_only_first_group:
+            return result[0]
+        else:
+            return result
     else:
         return ""
 
