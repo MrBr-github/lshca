@@ -980,13 +980,14 @@ class SYSFSDevice(object):
 
         self.rdma = self._data_source.list_dir_if_exists(self._sys_prefix + "/infiniband/").rstrip()
         net_list = self._data_source.list_dir_if_exists(self._sys_prefix + "/net/")
-
         self.net = ""
+        matched_net_list = []
         for net in net_list.split(" "):
             # the below code tries to identify which of the files has valid port number dev_id or dev_port
             # in mlx4 dev_port has the valid value, in mlx5 - dev_id
             # this solution mimics one in ibdev2netdev
 
+            # Multiple network interfaces can be in mlx4 devices or in DPUs (representors)
             net_port_dev_id = self._data_source.read_file_if_exists(self._sys_prefix + "/net/" + net + "/dev_id")
             try:
                 net_port_dev_id = int(net_port_dev_id, 16)
@@ -1007,8 +1008,12 @@ class SYSFSDevice(object):
             net_port += 1
 
             if str(net_port) == self._port:
-                self.net = net
-                break
+                # similar regexes used in OvsVctl
+                if re.match(r"^p\d+$", net) or re.match(r"^pf\d+hpf$", net) or re.match(r"^pf\d+vf\d+$", net):
+                    continue
+                matched_net_list.append(net)
+
+        self.net = " ".join(matched_net_list)
 
         self.hca_type = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/hca_type").rstrip()
 
@@ -1386,6 +1391,7 @@ class OvsVsctl(object):
             for br_net in data[bridge]:
                 if br_net == net:
                     bridge_found = True
+                # similar regexes used in SYSFSDevice
                 if re.match(r"^p\d+$", br_net):
                     uplnk_repr = br_net
                 if re.match(r"^pf\d+hpf$", br_net):
