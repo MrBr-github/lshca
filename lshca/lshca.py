@@ -1383,15 +1383,15 @@ class OvsVsctl(object):
         bridge_found = False
         for bridge in data:
             ovs_bridge = bridge
-            for port in data[bridge]:
-                if port == net:
+            for br_net in data[bridge]:
+                if br_net == net:
                     bridge_found = True
-                if re.match(r"^p\d+$", port):
-                    uplnk_repr = port
-                if re.match(r"^pf\d+hpf$", port):
-                    pf_repr = port
-                if re.match(r"^pf\d+vf\d+$", port):
-                    vf_repr = port
+                if re.match(r"^p\d+$", br_net):
+                    uplnk_repr = br_net
+                if re.match(r"^pf\d+hpf$", br_net):
+                    pf_repr = br_net
+                if re.match(r"^pf\d+vf\d+$", br_net):
+                    vf_repr = br_net
             if bridge_found:
                 break
 
