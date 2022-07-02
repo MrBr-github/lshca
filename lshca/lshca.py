@@ -36,7 +36,7 @@ except ImportError:
 
 class Config(object):
     def __init__(self):
-        self.debug = False
+        self.debug = 0
 
         self.output_view = "system"
         self.output_order_general = {
@@ -106,7 +106,7 @@ class Config(object):
 
         parser.add_argument('-hh', action='store_true', dest="extended_help",
                             help="show extended help message and exit. All fields description and more")
-        parser.add_argument('-d', action='store_true', dest="debug", help="run with debug outputs")
+        parser.add_argument('-d', type=int, default='0', dest="debug", help="run with debug outputs")
         parser.add_argument('-j', action='store_true', dest="json",
                             help="output data as JSON, affected by output selection flag")
         parser.add_argument('-v', '--version', action='version', version=str('%(prog)s ver. ' + self.ver))
@@ -175,7 +175,7 @@ class Config(object):
             self.record_data_for_debug = True
 
         if args.debug:
-            self.debug = True
+            self.debug = args.debug
 
         if args.view == "ib":
             self.sa_smp_query_device_enabled = True
@@ -961,6 +961,8 @@ class SYSFSDevice(object):
                self.numa
 
     def get_data(self):
+
+        self._data_source.log_debug(level=1, data="BDF:{} Port:{} SysFS path prefix:{}".format(self._bdf, self._port, self._sys_prefix ))
         vf_parent_file = self._data_source.read_link_if_exists(self._sys_prefix + "/physfn")
         if vf_parent_file != "":
             self.sriov = "VF"
@@ -2091,6 +2093,10 @@ class DataSource(object):
             environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
             self.record_data("environment", environment)
             self.record_data("output_fields", self.config.output_order)
+
+    def log_debug(self, level, data):
+        if self.config.debug >= level:
+            print("DEBUG{}: {}".format(level, data))
 
     def exec_shell_cmd(self, cmd, use_cache=False):
         cache_key = self.cmd_to_str(cmd)
