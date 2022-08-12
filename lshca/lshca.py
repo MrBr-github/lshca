@@ -348,7 +348,7 @@ class Config(object):
           LLDPsysDescr  - Switch system description. Usualy contains Switch type, OS type and OS ver. LLDP TLV 6
 
          DPU view
-          DPUmode - DPU mode of operation.
+          DPUmode   - DPU mode of operation.
             See link detailed explanations: https://docs.nvidia.com/networking/display/BlueFieldDPUOSLatest/Modes+of+Operation
             Possible values:
                 ECPF      - the NIC resources and functionality are owned and controlled by the embedded Arm subsystem
@@ -356,7 +356,12 @@ class Config(object):
                 NIC       - DPU behaves exactly like an adapter card from the perspective of the external host
                 Separated - network function is assigned to both the Arm cores and the x86 host cores. Traffic reaches both of them
                 Undefined - Failed to identify DPU operation mode
-         BFBver   - version of DPU BFB image. Works ONLY within the DPU os
+          BFBver    - version of DPU BFB image. Works ONLY within the DPU os
+          UplnkRepr - Uplink representor
+          PfRepr    - PF representors
+          VfRepr    - VF representors
+          OvsBrdg   - OVS bridge see link [representors] for more information
+          [representors] - https://docs.nvidia.com/networking/display/BlueFieldDPUOSLatest/Kernel+Representors+Model
 
         --== Elastic output rules ==--
         Elastic output comes to reduce excessive information in human readable output.
