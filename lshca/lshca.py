@@ -2355,6 +2355,11 @@ def humanize_number(num, precision=1):
             break
     return '%.*f%s' % (precision, num / factor, suffix)
 
+def get_lshca_version():
+    # used by setup.py for automatic version identification
+    config = Config()
+    return config.ver
+
 def main():
     if os.geteuid() != 0:
         sys.exit("You need to have root privileges to run this script")

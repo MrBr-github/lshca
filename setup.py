@@ -1,14 +1,17 @@
 from setuptools import setup
+from lshca import get_lshca_version
 
 from os import path
 this_directory = path.abspath(path.dirname(__file__))
 with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
+pkg_version = get_lshca_version()
+
 setup(
   name = 'lshca',
   packages = ['lshca'],
-  version = '3.6',
+  version = pkg_version,
   license='GNU GPLv3',
   description = 'This utility comes to provide bird\'s-eye view of HCAs installed',
   long_description=long_description,
@@ -16,7 +19,7 @@ setup(
   author = 'Michael Braverman',
   author_email = 'mrbr.mail@gmail.com',
   url = 'https://github.com/MrBr-github/lshca',
-  download_url = 'https://github.com/MrBr-github/lshca/archive/v3.6.tar.gz',
+  download_url = 'https://github.com/MrBr-github/lshca/archive/v{}.tar.gz'.format(pkg_version),
   keywords = ['HCA', 'INFINIBAND', 'ROCE'],
 #  install_requires=[  '', '', ],
   classifiers=[
