@@ -1,3 +1,9 @@
+Ver. 3.8
+    - Feature: Added dpu view
+               New fields: DPUmode, BFBver, OvsBrdg, UplnkRepr, PfRepr, VfRepr
+    - Feature: Added scalable function (SF) display. Part of the SRIOV column although not an SRIOV function
+    - Feature: Hide unused ports from elastic view. Reduces 136 output lines to 8 per HCA
+    - Known issues: LLDP capture is not working from with in DPU
 Ver. 3.7
     - Feature: Added lldp view
                New fields: LLDPportId, LLDPsysName, LLDPmgmtAddr, LLDPsysDescr
@@ -13,7 +19,7 @@ Ver. 3.6
     - Feature: Added traffic view
                New fields are: TX_bps, RX_bps
                Limitation: Partial support on LAG interfaces.
-                           Doesn`t accounts DPDK handled traffic
+                           Doesn't accounts DPDK handled traffic
     - Fixed bug: Fixed RoCEstat for LAG devices
     - Fixed bug: fixed MST start/stop behavior. It'll be left in same state as it was before lshca execution.
     - Fixed bug: RoCEstat output printed correctly also for 'all' view
