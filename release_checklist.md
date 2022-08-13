@@ -7,3 +7,6 @@
 - Update WIKI
   - Extended help
   - Features overview
+- If new functionality or new fields exists
+  - add recorded data to `lshca_regression_data` repo
+  - run an Actions job to check it
