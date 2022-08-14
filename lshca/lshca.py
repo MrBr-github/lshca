@@ -10,23 +10,23 @@
 
 from __future__ import division
 from __future__ import print_function
+import argparse
+import ctypes
+import fcntl
+import hashlib
+import json
 import os
 import pickle
 import re
+import signal
+import socket
 import sre_constants
+import struct
 import subprocess
 import sys
 import tarfile
-import time
-import json
-import argparse
 import textwrap
-import hashlib
-import ctypes
-import socket
-import fcntl
-import signal
-import struct
+import time
 
 try:
     from StringIO import StringIO # for Python 2
