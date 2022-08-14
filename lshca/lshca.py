@@ -15,6 +15,7 @@ import ctypes
 import fcntl
 import hashlib
 import json
+import logging
 import os
 import pickle
 import re
@@ -1000,7 +1001,7 @@ class SYSFSDevice(object):
 
     def get_data(self):
         # type: () -> None
-        self._data_source.log_debug(level=1, data="BDF:{} Port:{} SysFS path prefix:{}".format(self._bdf, self._port, self._sys_prefix ))
+        self._data_source.log.debug("BDF:{} Port:{} SysFS path prefix:{}".format(self._bdf, self._port, self._sys_prefix ))
         vf_parent_file = self._data_source.read_link_if_exists(self._sys_prefix + "/physfn")
         if vf_parent_file != "":
             self.sriov = "VF"
@@ -2151,6 +2152,14 @@ class DataSource(object):
         self.cache = {}
         self.config = config
         self.interfaces_struct = []
+
+        log_formater = logging.Formatter('%(levelname)s - %(message)s')
+        log_handler = logging.StreamHandler()
+        log_handler.setFormatter(log_formater)
+
+        self.log = logging.getLogger("lshcaLogger")
+        self.log.addHandler(log_handler)
+
         if self.config.record_data_for_debug is True:
             if not os.path.exists(self.config.record_dir):
                 os.makedirs(self.config.record_dir)
@@ -2185,10 +2194,6 @@ class DataSource(object):
             environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
             self.record_data("environment", environment)
             self.record_data("output_fields", self.config.output_order)
-
-    def log_debug(self, level, data):
-        if self.config.debug >= level:
-            print("DEBUG{}: {}".format(level, data))
 
     def exec_shell_cmd(self, cmd, use_cache=False):
         # type: (str, bool) -> list
@@ -2460,13 +2465,14 @@ def get_lshca_version():
     return config.ver
 
 def main():
-    if os.geteuid() != 0:
-        sys.exit("You need to have root privileges to run this script")
-
     config = Config()
     config.parse_arguments(sys.argv[1:])
 
     data_source = DataSource(config)
+
+    if os.geteuid() != 0:
+        data_source.log.critical("You need to have root privileges to run this script")
+        sys.exit(1)
 
     hca_manager = HCAManager(data_source, config)
     hca_manager.get_data()
