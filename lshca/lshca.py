@@ -28,6 +28,7 @@ import tarfile
 import textwrap
 import time
 
+
 try:
     from StringIO import StringIO # for Python 2
 except ImportError:
@@ -36,6 +37,7 @@ except ImportError:
 
 class Config(object):
     def __init__(self):
+        # type: () -> None
         self.debug = 0
 
         self.output_view = "system"
@@ -88,6 +90,7 @@ class Config(object):
         self.lldp_capture_timeout = 35 # seconds. Based on default 30s value in Mellanox Onyx OS
 
     def parse_arguments(self, user_args):
+        # type: (list) -> None
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
                                          epilog=textwrap.dedent('''\
                      Output warnings and errors:
@@ -171,6 +174,7 @@ class Config(object):
         self.process_arguments(args)
 
     def process_arguments(self, args):
+        # type: (argparse.Namespace) -> None
         if args.mode == "record":
             self.record_data_for_debug = True
 
@@ -242,6 +246,7 @@ class Config(object):
         self.colour_warnings_and_errors = args.colour
 
     def extended_help(self):
+        # type: () -> None
         extended_help = textwrap.dedent("""
         --== Detailed fields description ==--
         Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
@@ -389,11 +394,13 @@ class Config(object):
 
 class HCAManager(object):
     def __init__(self, data_source, config):
+        # type: (DataSource, Config) -> None
         self._config = config
         self._data_source = data_source
         self.mlnxHCAs = []
 
     def get_data(self):
+        # type: () -> None
         mlnx_bdf_list = []
         # Same lspci cmd used in MST source in order to benefit from cache
         raw_mlnx_bdf_list = self._data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
@@ -480,6 +487,7 @@ class HCAManager(object):
                 hca.check_for_issues()
 
     def display_hcas_info(self):
+        # type: () -> None
         out = Output(self._config)
         for hca in self.mlnxHCAs:
             output_info = hca.output_info()
@@ -488,6 +496,7 @@ class HCAManager(object):
         out.print_output()
 
     def _get_hca_by_sys_image_guid(self, sys_image_guid):
+        # type: (str) -> str
         for hca in self.mlnxHCAs:
             if sys_image_guid == hca.sys_image_guid:
                 return hca
@@ -496,6 +505,7 @@ class HCAManager(object):
 
 class Output(object):
     def __init__(self, config):
+        # type: (Config) -> None
         self.config = config
         self.output = []
         self.column_width = {}
@@ -508,6 +518,7 @@ class Output(object):
         self.output.append(data)
 
     def apply_select_output_filters(self):
+        # type: () -> None
         if len(self.config.output_fields_filter_positive) > 0:
             self.output_order = self.config.output_fields_filter_positive
         elif len(self.config.output_fields_filter_negative) > 0:
@@ -534,6 +545,7 @@ class Output(object):
                 bdf_device.pop(key, None)
 
     def apply_where_output_filters(self):
+        # type: () -> None
         if not self.config.where_output_filter:
             return
 
@@ -566,6 +578,7 @@ class Output(object):
                 self.output.remove(hca)
 
     def elastic_output(self):
+        # type: () -> None
         for hca in self.output:
             hca_fields_to_remove = {}
             bfb_fields_to_remove = {}
@@ -673,12 +686,14 @@ class Output(object):
 
 
     def filter_out_data(self):
+        # type: () -> None
         self.apply_where_output_filters()
         self.apply_select_output_filters()
         if self.config.output_format == "human_readable" and self.config.output_format_elastic:
             self.elastic_output()
 
     def update_separator_and_column_width(self):
+        # type: () -> None
         line_width = 0
         for hca in self.output:
             curr_hca_column_width = {}
@@ -708,6 +723,7 @@ class Output(object):
             self.separator_len = max(self.separator_len, bdf_device_line_width, line_width)
 
     def print_output(self):
+        # type: () -> None
         self.filter_out_data()
 
         if self.config.output_format == "human_readable":
@@ -720,6 +736,7 @@ class Output(object):
             self.print_output_json()
 
     def colour_warnings_and_errors(self, field_value):
+        # type: (str) -> str
         if self.config.show_warnings_and_errors and self.config.colour_warnings_and_errors:
             if re.search(re.escape(self.config.error_sign) + "$", str(field_value).strip()):
                 field_value = BColors.FAIL + field_value + BColors.ENDC
@@ -729,6 +746,7 @@ class Output(object):
         return field_value
 
     def print_output_human_readable(self):
+        # type: () -> None
         self.separator = self.config.output_separator_char * self.separator_len
 
         print(self.separator)
@@ -739,9 +757,11 @@ class Output(object):
             print(self.separator)
 
     def print_output_json(self):
+        # type: () -> None
         print(json.dumps(self.output, indent=4, sort_keys=True))
 
     def print_hca_header(self, args):
+        # type: (dict) -> None
         order_dict = {}
 
         position = 0
@@ -767,6 +787,7 @@ class Output(object):
             print('\n'.join(output_list))
 
     def print_bdf_devices(self, args):
+        # type: (list) -> None
         count = 1
         order_dict = {}
 
@@ -804,6 +825,7 @@ class MSTDevice(object):
     mst_service_should_be_stopped = False
 
     def __init__(self, data_source, config):
+        # type: (DataSource, Config) -> None
         self._config = config
         self._data_source = data_source
         self._mst_raw_data = None
@@ -812,14 +834,17 @@ class MSTDevice(object):
         self.mst_cable = ""
 
     def __del__(self):
+        # type: () -> None
         if MSTDevice.mst_service_should_be_stopped:
             self._data_source.exec_shell_cmd("mst stop", use_cache=True)
             MSTDevice.mst_service_should_be_stopped = False
 
     def __repr__(self):
+        # type: () -> str
         return self._mst_raw_data
 
     def init_mst_service(self):
+        # type: () -> None
         if MSTDevice.mst_service_initialized:
             return
 
@@ -844,6 +869,7 @@ class MSTDevice(object):
         MSTDevice.mst_service_initialized = True
 
     def get_data(self, bdf):
+        # type: (str) -> None
         if not MSTDevice.mst_device_enabled:
             return
 
@@ -865,11 +891,13 @@ class MSTDevice(object):
 
 class PCIDevice(object):
     def __init__(self, bdf, data_source, config):
+        # type: (str, DataSource, Config) -> None
         self._bdf = bdf
         self._config = config
         self._data_source = data_source
 
     def get_data(self):
+        # type: () -> None
         self._data = self._data_source.exec_shell_cmd("lspci -vvvDnn -s" + self._bdf, use_cache=True)
         # Handling following string, taking reset of string after HCA type
         # 0000:01:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
@@ -903,8 +931,8 @@ class PCIDevice(object):
         elif self._lnkCapSpeed != self._lnkStaSpeed and self._config.show_warnings_and_errors is True:
             self.lnkStaWidth = str(self.lnkStaWidth) + self._config.warning_sign
 
-
     def __repr__(self):
+        # type: () -> str
         delim = " "
         return "PCI device:" + delim +\
                self._bdf + delim + \
@@ -914,18 +942,21 @@ class PCIDevice(object):
 
     @property
     def pn(self):
+        # type: () -> str
         if self.revision != "=N/A=":
             return self._pn + "  rev. " + self.revision
         else:
             return self._pn
 
     def get_info_from_lspci_data(self, search_regex, output_regex):
+        # type: (re.Pattern, re.Pattern) -> str
         search_result = find_in_list(self._data, search_regex)
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
 
     @staticmethod
     def pci_speed_to_pci_gen(speed):
+        # type: (str) -> str
         if str(speed) == "2.5":
             gen = "1"
         elif str(speed) == "5":
@@ -945,6 +976,7 @@ class PCIDevice(object):
 
 class SYSFSDevice(object):
     def __init__(self, bdf, data_source, config, port=1, sf=""):
+        # type: (str, DataSource, Config, int, str) -> None
         self._bdf = bdf
         self._config = config
         self._data_source = data_source
@@ -958,6 +990,7 @@ class SYSFSDevice(object):
             self.is_sf = True
 
     def __repr__(self):
+        # type: () -> str
         delim = " "
         return "SYS device:" + delim +\
                self._bdf + delim + \
@@ -966,7 +999,7 @@ class SYSFSDevice(object):
                self.numa
 
     def get_data(self):
-
+        # type: () -> None
         self._data_source.log_debug(level=1, data="BDF:{} Port:{} SysFS path prefix:{}".format(self._bdf, self._port, self._sys_prefix ))
         vf_parent_file = self._data_source.read_link_if_exists(self._sys_prefix + "/physfn")
         if vf_parent_file != "":
@@ -1176,6 +1209,7 @@ class SYSFSDevice(object):
             self.sf_list = []
 
     def get_traffic(self):
+        # type: () -> None
         # see https://community.mellanox.com/s/article/understanding-mlx5-linux-counters-and-status-parameters for more info about the counteres
         if self.lnk_state == "down":
             return
@@ -1241,6 +1275,7 @@ class SYSFSDevice(object):
 
 class SaSmpQueryDevice(object):
     def __init__(self,  data_source, config):
+        # type: (DataSource, Config) -> None
         self._data_source = data_source
         self._config = config
 
@@ -1249,6 +1284,7 @@ class SaSmpQueryDevice(object):
         self.sm_guid = ""
 
     def get_data(self, rdma, port, smlid):
+        # type: (str, str, str) -> None
         self._port = port
         self._rdma = rdma
         self._smlid = smlid
@@ -1272,6 +1308,7 @@ class SaSmpQueryDevice(object):
         self.sm_guid = extract_string_by_regex(self.sm_guid, "0x(.*)")
 
     def get_info_from_sa_smp_query_data(self, search_regex, output_regex):
+        # type: (re.Pattern, re.Pattern) -> str
         search_result = find_in_list(self.data, search_regex)
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
@@ -1279,6 +1316,7 @@ class SaSmpQueryDevice(object):
 
 class MlxCable(object):
     def __init__(self, data_source):
+        # type: (DataSource) -> None
         self._data_source = data_source
 
         self.cable_length = ""
@@ -1286,6 +1324,7 @@ class MlxCable(object):
         self.cable_sn = ""
 
     def get_data(self, mst_cable):
+        # type: (str) -> None
         if mst_cable == "":
             return
         data = self._data_source.exec_shell_cmd("mlxcables -d " + mst_cable, use_cache=True)
@@ -1296,6 +1335,7 @@ class MlxCable(object):
 
 class MlxLink(object):
     def __init__(self, data_source):
+        # type: (DataSource) -> None
         self._data_source = data_source
 
         self.physical_link_recommendation = ""
@@ -1303,6 +1343,7 @@ class MlxLink(object):
         self.physical_link_status = ""
 
     def get_data(self, mst_device, port):
+        # type: (str, int) -> None
         if mst_device == "":
             return
         data = self._data_source.exec_shell_cmd("mlxlink -d {} -p {} --json".format(mst_device, port), use_cache=True)
@@ -1326,8 +1367,10 @@ class MlxLink(object):
                     if self.physical_link_recommendation == "No_issue_was_observed.":
                         self.physical_link_recommendation = "No_issue"
 
+
 class MlxConfig(object):
     def __init__(self, data_source):
+        # type: (DataSource) -> None
         self._data_source = data_source
 
         self.internal_cpu_model = ""
@@ -1337,6 +1380,7 @@ class MlxConfig(object):
         self.internal_cpu_offload_engine = "    "
 
     def get_data(self, mst_device):
+        # type: (str) -> None
         if mst_device == "":
             return
 
@@ -1351,13 +1395,16 @@ class MlxConfig(object):
         self.internal_cpu_cpu_ib_vport0 = search_in_list_and_extract_by_regex(data, r'.*INTERNAL_CPU_IB_VPORT0.*', r'.*\((.*)\)')
         self.internal_cpu_offload_engine = search_in_list_and_extract_by_regex(data, r'.*INTERNAL_CPU_OFFLOAD_ENGINE.*', r'.*\((.*)\)')
 
+
 class MlxPrivHost(object):
     def __init__(self, data_source):
+        # type: (DataSource) -> None
         self._data_source = data_source
 
         self.restric_level = ""
 
     def get_data(self, mst_device):
+        # type: (str) -> None
         if mst_device == "":
             return
 
@@ -1369,8 +1416,10 @@ class MlxPrivHost(object):
         tmp = search_in_list_and_extract_by_regex(data, r'^level +: [A-Z]+', r'.*: ([A-Z]+)')
         self.restric_level = tmp.lower()
 
+
 class OvsVsctl(object):
     def __init__(self, data_source):
+        # type: (DataSource) -> None
         self._data_source = data_source
 
         self.ovs_bridge = ""
@@ -1379,6 +1428,7 @@ class OvsVsctl(object):
         self.vf_repr = ""
 
     def get_data(self, net):
+        # type: (str) -> None
         data = {}
         ovsvctl_list_br = self._data_source.exec_shell_cmd("ovs-vsctl list-br", use_cache=True)
         for bridge in ovsvctl_list_br:
@@ -1412,12 +1462,15 @@ class OvsVsctl(object):
             self.pf_repr = pf_repr
             self.vf_repr = vf_repr
 
+
 class MiscCMDs(object):
     def __init__(self, data_source, config):
+        # type: (DataSource, Config) -> None
         self.data_source = data_source
         self.config = config
 
     def get_mlnx_qos_trust(self, net):
+        # type: (str) -> str
         data = self.data_source.exec_shell_cmd("mlnx_qos -i " + net, use_cache=True)
         regex = "Priority trust state: (.*)"
         search_result = find_in_list(data, regex)
@@ -1425,6 +1478,7 @@ class MiscCMDs(object):
         return search_result
 
     def get_mlnx_qos_pfc(self, net):
+        # type: (str) -> str
         data = self.data_source.exec_shell_cmd("mlnx_qos -i " + net, use_cache=True)
         regex = '^\s+enabled\s+(([0-9]\s+)+)'
         search_result = find_in_list(data, regex)
@@ -1432,6 +1486,7 @@ class MiscCMDs(object):
         return search_result
 
     def get_tempr(self, rdma):
+        # type: (str) -> str
         data = self.data_source.exec_shell_cmd("mget_temp -d " + rdma, use_cache=True)
         regex = '^([0-9]+)\s+$'
         search_result = find_in_list(data, regex)
@@ -1446,6 +1501,7 @@ class MiscCMDs(object):
             return "=N/A="
 
     def get_driver_ver(self):
+        # type: (str) -> str
         mofed_ver = str(self.data_source.exec_shell_cmd("ofed_info -s ", use_cache=True))
         regex = '.*MLNX_OFED_LINUX-(.*):.*'
         mofed_ver = extract_string_by_regex(mofed_ver, regex)
@@ -1462,12 +1518,14 @@ class MiscCMDs(object):
             return "N/A"
 
     def get_bfb_version(self):
+        # type: () -> str
         ver = self.data_source.read_file_if_exists("/etc/mlnx-release", use_cache=True)
         return ver.strip()
 
 
 class MlnxBDFDevice(object):
     def __init__(self, bdf, data_source, config, port=1, sf=""):
+        # type: (str, DataSource, Config, int, str) -> None
         self.bdf = bdf
         self._config = config
         self._data_source = data_source
@@ -1487,6 +1545,7 @@ class MlnxBDFDevice(object):
         self._lldpData = LldpData(self._data_source, self._config)
 
     def get_data(self):
+        # type: () -> None
         self._get_if_inside_dpu(self._data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True))
 
         # ------ SysFS ------
@@ -1621,6 +1680,7 @@ class MlnxBDFDevice(object):
         self.llpd_mgmt_addr = self._lldpData.mgmt_addr
 
     def _is_dpu(self):
+        # type: () -> bool
         # This function decides on well known Mellanox PCI ids taken from the https://pci-ids.ucw.cz/read/PC/15b3
         # it comes to eliminate usage of slow mlxconfig and mlxprivhost utils on non dpu HCAs
         # all BF DPUs start with a2xx or c2xx
@@ -1630,19 +1690,21 @@ class MlnxBDFDevice(object):
             return False
 
     def _get_if_inside_dpu(self, pci_tree):
+        # type: (list) -> None
         for bdf in pci_tree:
             result = extract_string_by_regex(bdf, "(0000:00:00.0) (.+)")
             if result != "=N/A=":
                 self._inside_dpu = True
                 return
 
-
     def __repr__(self):
+        # type: () -> str
         return self._sysFSDevice.__repr__() + "\n" + self._pciDevice.__repr__() + "\n" + \
                 self._mstDevice.__repr__() + "\n"
 
     @property
     def sriov(self):
+        # type: () -> str
         if self._config.show_warnings_and_errors is True and self._sysFSDevice.sriov == "PF" and \
                 re.match(r".*[Vv]irtual [Ff]unction.*", self._pciDevice.description):
             return self._sysFSDevice.sriov + self._config.warning_sign
@@ -1651,6 +1713,7 @@ class MlnxBDFDevice(object):
 
     @property
     def roce_status(self):
+        # type: () -> str
         if self.link_layer == "IB" or not ( self._config.output_view == "roce" or self._config.output_view == "all"):
             return "N/A"
 
@@ -1706,6 +1769,7 @@ class MlnxBDFDevice(object):
 
     @property
     def dpu_mode(self):
+        # type: () -> str
         if not self._is_dpu():
             return ""
 
@@ -1731,11 +1795,13 @@ class MlnxBDFDevice(object):
         return mode
 
     def get_traff(self):
+        # type: () -> None
         self.sysFSDevice.get_traffic()
         self.traff_tx_bitps = self.sysFSDevice.traff_tx_bitps
         self.traff_rx_bitps = self.sysFSDevice.traff_rx_bitps
 
     def output_info(self):
+        # type: () -> dict
         if self.sriov in ("PF", "PF" + self._config.warning_sign):
             sriov = self.sriov + "  "
         else:
@@ -1789,6 +1855,7 @@ class MlnxBDFDevice(object):
 
 class MlnxHCA(object):
     def __init__(self, bdf_dev, config):
+        # type: (MlnxBDFDevice, Config) -> None
         self.bdf_devices = []
         self.config = config
 
@@ -1810,6 +1877,7 @@ class MlnxHCA(object):
         self._hca_index = None
 
     def __repr__(self):
+        # type: () -> str
         output = ""
         for bdf_dev in self.bdf_devices:
             output = output + str(bdf_dev)
@@ -1817,13 +1885,16 @@ class MlnxHCA(object):
 
     @property
     def hca_index(self):
+        # type: () -> str
         return "#" + str(self._hca_index)
 
     @hca_index.setter
     def hca_index(self, index):
+        # type: (int) -> None
         self._hca_index = index
 
     def add_bdf_dev(self, new_bdf_dev):
+        # type: (MlnxBDFDevice) -> None
         if new_bdf_dev.sriov == "VF" and new_bdf_dev.vfParent != "-":
             for i, bdf_dev in enumerate(self.bdf_devices):
                 if bdf_dev.bdf == new_bdf_dev.vfParent:
@@ -1833,6 +1904,7 @@ class MlnxHCA(object):
             self.bdf_devices.append(new_bdf_dev)
 
     def output_info(self):
+        # type: () -> dict
         output = {"SN": self.sn,
                   "PN": self.pn,
                   "FW": self.fw,
@@ -1849,6 +1921,7 @@ class MlnxHCA(object):
         return output
 
     def check_for_issues(self):
+        # type: () -> None
         # this function comes to check for issues on HCA level cross all BDFs
         inactive_bond_slaves = []
         bond_type = ""
@@ -1866,11 +1939,13 @@ class MlnxHCA(object):
 
 class MlnxRdmaBondDevice(MlnxBDFDevice):
     def get_data(self):
+        # type: () -> None
         #Using python2 super notation for cross version compatability
         super(MlnxRdmaBondDevice, self).get_data()
         self._fix_rdma_bond()
 
     def _fix_rdma_bond(self):
+        # type: () -> None
         index = extract_string_by_regex(self.rdma, ".*([0-9]+)$")
         self.bdf = "rdma_bond_" + index
         self.net = self.bond_master
@@ -1963,6 +2038,7 @@ class LldpData:
     LLDP_TLV_TYPE_SHIFT = 9
 
     def __init__(self, data_source, config):
+        # type: (DataSource, Config) -> None
         self._config = config
         self._data_source = data_source
         self._interface = None
@@ -1976,6 +2052,7 @@ class LldpData:
         self.system_description = ""
 
     def parse_lldp_packet(self, rcvd_packet):
+        # type: (tuple) -> None
         # Packet example
         # (b'\x01\x80\xc2\x00\x00\x0e\xb8Y\x9f\xa9\x9c`\x88\xcc\x02\x07\x04\xb8Y\x9f\xa9\x9c\x00\x04\x07\x05Eth1/1\x06\x02\x00x\x08\x01 \n\tanc-dx-t1\x0c\x18MSN3700,Onyx,SWv3.9.0914\x0e\x04\x00\x14\x00\x04\x10\x16\x05\x01\n\x90\xfc\x85\x02\x00\x00\x00\x00\n+\x06\x01\x02\x01\x02\x02\x01\x01\x00\xfe\x19\x00\x80\xc2\t\x08\x00\x03\x00`2\x00\x002\x00\x00\x00\x00\x02\x02\x02\x02\x02\x02\x00\x02\xfe\x19\x00\x80\xc2\n\x00\x00\x03\x00`2\x00\x002\x00\x00\x00\x00\x02\x02\x02\x02\x02\x02\x00\x02\xfe\x06\x00\x80\xc2\x0b\x08\x08\xfe\x08\x00\x80\xc2\x0c\x00c\x12\xb7\x00\x00', ('ens1f0', 35020, 2, 1, b'\xb8Y\x9f\xa9\x9c`'))
         if rcvd_packet:
@@ -2036,6 +2113,7 @@ class LldpData:
                 self.mgmt_addr = "Fail2Decode"
 
     def lldp_err_msg(self, msg, sign):
+        # type: (str, str) -> None
         if self._config.show_warnings_and_errors is True:
             msg += sign
         self.port_id = msg
@@ -2044,6 +2122,7 @@ class LldpData:
         self.mgmt_addr = msg
 
     def get_data(self, net, ip_state):
+        # type: (str, str) -> None
         if sys.version_info[0] < 3:
             raise Exception("Getting LLDP data requires Python3")
 
@@ -2068,6 +2147,7 @@ class LldpData:
 
 class DataSource(object):
     def __init__(self, config):
+        # type: (Config) -> None
         self.cache = {}
         self.config = config
         self.interfaces_struct = []
@@ -2085,6 +2165,7 @@ class DataSource(object):
             sys.stdout = self.stdout
 
     def __del__(self):
+        # type: () -> None
         if self.config.record_data_for_debug is True:
             sys.stdout = sys.__stdout__
             try:
@@ -2110,6 +2191,7 @@ class DataSource(object):
             print("DEBUG{}: {}".format(level, data))
 
     def exec_shell_cmd(self, cmd, use_cache=False):
+        # type: (str, bool) -> list
         cache_key = self.cmd_to_str(cmd)
 
         if use_cache is True and cache_key in self.cache:
@@ -2132,6 +2214,7 @@ class DataSource(object):
         return output
 
     def record_data(self, cmd, output):
+        # type: (str, list) -> None
         p_output = pickle.dumps(output)
 
         if sys.version_info.major == 3:
@@ -2150,6 +2233,7 @@ class DataSource(object):
         tar.close()
 
     def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
+        # type: (str, str, bool) -> str
         cache_key = self.cmd_to_str(str(file_to_read) + str(record_suffix))
 
         if use_cache is True and cache_key in self.cache:
@@ -2179,6 +2263,7 @@ class DataSource(object):
         return output
 
     def read_link_if_exists(self, link_to_read):
+        # type: (str) -> str
         try:
             output = os.readlink(link_to_read)
         except OSError as exception:
@@ -2195,6 +2280,7 @@ class DataSource(object):
         return output
 
     def list_dir_if_exists(self, dir_to_list):
+        # type: (str) -> str
         try:
             output = os.listdir(dir_to_list)
             output = " ".join(output)
@@ -2212,6 +2298,7 @@ class DataSource(object):
         return output
 
     def exec_python_code(self, python_code, record_suffix="", use_cache=False):
+        # type: (str, str, bool) -> str
         cache_key = self.cmd_to_str(str(python_code) + str(record_suffix))
 
         if use_cache is True and cache_key in self.cache:
@@ -2229,6 +2316,7 @@ class DataSource(object):
         return output
 
     def get_raw_socket_data(self, interface, ether_proto, capture_timeout, use_cache=True):
+        # type: (str, int, int, bool) -> str
         cache_key = self.cmd_to_str(str(interface) + str(ether_proto))
 
         if use_cache is True and cache_key in self.cache:
@@ -2286,6 +2374,7 @@ class DataSource(object):
             sys.exit(1)
 
     def _set_interface_promisc_status(self, interface, raw_socket, promisc):
+        # type: (str, socket.socket, bool) -> None
         IFF_PROMISC = 0x100             # Set interface promiscuous
         SIOCGIFFLAGS = 0x8913           # Get flags  SIOC G IF FLAGS
         SIOCSIFFLAGS = 0x8914           # Set flags  SIOC S IF FLAGS
@@ -2302,6 +2391,7 @@ class DataSource(object):
 
     @staticmethod
     def cmd_to_str(cmd):
+        # type: (str) -> str
         output = re.escape(cmd)
         return output
 
@@ -2328,6 +2418,7 @@ def extract_string_by_regex(data_string, regex, na_string="=N/A="):
 
 
 def find_in_list(list_to_search_in, regex_pattern, return_only_first_group=True):
+    # type: (list, re.Pattern, bool) -> str
     regex = re.compile(regex_pattern)
     result = [m.group(0) for l in list_to_search_in for m in [regex.search(l)] if m]
 
@@ -2340,11 +2431,13 @@ def find_in_list(list_to_search_in, regex_pattern, return_only_first_group=True)
         return ""
 
 def search_in_list_and_extract_by_regex(data_list, search_regex, output_regex):
+    # type: (list, re.Pattern, re.Pattern) -> str
     list_search_result = find_in_list(data_list, search_regex)
     regex_search_result = extract_string_by_regex(list_search_result, output_regex)
     return str(regex_search_result).strip()
 
 def humanize_number(num, precision=1):
+    # type: (int, int) -> str
     abbrevs = (
         (10 ** 15, 'P'),
         (10 ** 12, 'T'),
@@ -2361,6 +2454,7 @@ def humanize_number(num, precision=1):
     return '%.*f%s' % (precision, num / factor, suffix)
 
 def get_lshca_version():
+    # type: () -> str
     # used by setup.py for automatic version identification
     config = Config()
     return config.ver
