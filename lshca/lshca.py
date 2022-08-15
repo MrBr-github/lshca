@@ -649,7 +649,7 @@ class Output(object):
                     bfb_fields_to_remove["PhyAnalisys"] = False
 
                 # ---- Remove whole BDF device if it part of DPU and LnkStat is nop
-                if hca.get("DPUmode") != "" and bdf_device["LnkStat"] == "nop":
+                if hca.get("DPUmode") != "" and bdf_device.get("LnkStat") == "nop":
                     bdf_devices_to_remove.append(hca["bdf_devices"].index(bdf_device))
 
                 # ---- Remove LLDP fields if the interface in not Eth
