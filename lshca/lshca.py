@@ -1287,8 +1287,8 @@ class SaSmpQueryDevice(object):
         self.sw_description = ""
         self.sm_guid = ""
 
-    def get_data(self, rdma, port, smlid):
-        # type: (str, str, str) -> None
+    def get_data(self, rdma, port, smlid, lnk_state):
+        # type: (str, str, str, str) -> None
         self._port = port
         self._rdma = rdma
         self._smlid = smlid
@@ -1307,9 +1307,12 @@ class SaSmpQueryDevice(object):
         self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " ND -D  0,1")
         self.sw_description = self.get_info_from_sa_smp_query_data(".*Node *Description.*", "\.+(.*)")
 
-        self.data = self._data_source.exec_shell_cmd("saquery SMIR -C " + self._rdma + " -P " + self._port + " " + self._smlid)
-        self.sm_guid = self.get_info_from_sa_smp_query_data(".*GUID.*", "\.+(.*)")
-        self.sm_guid = extract_string_by_regex(self.sm_guid, "0x(.*)")
+        # Get SM lid
+        self.sm_guid = ''
+        if lnk_state != "init":
+            self.data = self._data_source.exec_shell_cmd("saquery SMIR -C " + self._rdma + " -P " + self._port + " " + self._smlid)
+            self.sm_guid = self.get_info_from_sa_smp_query_data(".*GUID.*", "\.+(.*)")
+            self.sm_guid = extract_string_by_regex(self.sm_guid, "0x(.*)")
 
     def get_info_from_sa_smp_query_data(self, search_regex, output_regex):
         # type: (re.Pattern, re.Pattern) -> str
@@ -1642,8 +1645,8 @@ class MlnxBDFDevice(object):
         self.bfb_ver = self._miscDevice.get_bfb_version()
 
         # ------ SA/SMP query ------
-        if self._config.sa_smp_query_device_enabled:
-            self._sasmpQueryDevice.get_data(self.rdma, self.port, self.smlid)
+        if self._config.sa_smp_query_device_enabled and self.link_layer == "IB" and self.lnk_state != "down":
+            self._sasmpQueryDevice.get_data(self.rdma, self.port, self.smlid, self.lnk_state)
         self.sw_guid = self._sasmpQueryDevice.sw_guid
         self.sw_description = self._sasmpQueryDevice.sw_description
         self.sm_guid = self._sasmpQueryDevice.sm_guid
