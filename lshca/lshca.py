@@ -1002,6 +1002,9 @@ class SYSFSDevice(object):
     def get_data(self):
         # type: () -> None
         self._data_source.log.debug("BDF:{} Port:{} SysFS path prefix:{}".format(self._bdf, self._port, self._sys_prefix ))
+        if not self._data_source.list_dir_if_exists("{}/infiniband/".format(self._sys_prefix)):
+            self._data_source.log.error("Sysfs data for {} PCI address is missing. Check for driver or fw issues. Start from dmesg".format(self._bdf))
+
         vf_parent_file = self._data_source.read_link_if_exists(self._sys_prefix + "/physfn")
         if vf_parent_file != "":
             self.sriov = "VF"
@@ -2205,6 +2208,12 @@ class DataSource(object):
         else:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, executable="/bin/bash")
             output, error = process.communicate()
+            if error:
+                if isinstance(error, bytes):
+                    error = error.decode()
+                error = error.strip()
+                self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
+
             if isinstance(output, bytes):
                 output = output.decode()
 
