@@ -1335,7 +1335,7 @@ class MlxCable(object):
         if mst_cable == "":
             return
         data = self._data_source.exec_shell_cmd("mlxcables -d " + mst_cable, use_cache=True)
-        self.cable_length = search_in_list_and_extract_by_regex(data, r'Length +:.*', r'Length +:(.*)').replace(" ", "")
+        self.cable_length = search_in_list_and_extract_by_regex(data, r'Length .*:.*', r'Length .*:(.*)').replace(" ", "")
         self.cable_pn = search_in_list_and_extract_by_regex(data, r'Part number +:.*', r'Part number +:(.*)').replace(" ", "")
         self.cable_sn = search_in_list_and_extract_by_regex(data, r'Serial number +:.*', r'Serial number +:(.*)').replace(" ", "")
 
