@@ -1359,16 +1359,15 @@ class MlxLink(object):
         except (TypeError, ValueError):
             return
 
-        if "result" in json_data and \
-           "output" in json_data["result"]:
-            if "Operational Info" in json_data["result"]["output"]:
-                if "Physical state" in  json_data["result"]["output"]["Operational Info"]:
-                   self.physical_link_status = json_data["result"]["output"]["Operational Info"]["Physical state"]
-                if "Speed" in  json_data["result"]["output"]["Operational Info"]:
-                    self.physical_link_speed = json_data["result"]["output"]["Operational Info"]["Speed"]
-            if "Troubleshooting Info" in json_data["result"]["output"]:
-                if "Recommendation" in json_data["result"]["output"]["Troubleshooting Info"]:
-                    self.physical_link_recommendation = json_data["result"]["output"]["Troubleshooting Info"]["Recommendation"]
+        if json_data.get("result") and "output" in json_data.get("result"):
+            if "Operational Info" in json_data.get("result", {}).get("output"):
+                if "Physical state" in  json_data.get("result", {}).get("output", {}).get("Operational Info"):
+                   self.physical_link_status = json_data.get("result", {}).get("output", {}).get("Operational Info", {}).get("Physical state")
+                if "Speed" in  json_data.get("result", {}).get("output", {}).get("Operational Info"):
+                    self.physical_link_speed = json_data.get("result", {}).get("output", {}).get("Operational Info", {}).get("Speed")
+            if "Troubleshooting Info" in json_data.get("result", {}).get("output"):
+                if "Recommendation" in json_data.get("result", {}).get("output", {}).get("Troubleshooting Info"):
+                    self.physical_link_recommendation = json_data.get("result", {}).get("output", {}).get("Troubleshooting Info", {}).get("Recommendation")
                     self.physical_link_recommendation = self.physical_link_recommendation.replace(" ", "_")
 
                     if self.physical_link_recommendation == "No_issue_was_observed.":
