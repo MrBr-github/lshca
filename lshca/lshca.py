@@ -1349,7 +1349,7 @@ class MlxLink(object):
         self.physical_link_speed = ""
         self.physical_link_status = ""
 
-    def get_data(self, mst_device, port):
+    def get_data(self, mst_device, port=1):
         # type: (str, int) -> None
         if mst_device == "":
             return
@@ -1612,7 +1612,7 @@ class MlnxBDFDevice(object):
 
         # ------ MLX link ------
         if self._config.output_view == "cable" or self._config.output_view == "all":
-            self._mlxLink.get_data(self.mst_device, self.port)
+            self._mlxLink.get_data(self.mst_device)
         self.physical_link_speed = self._mlxLink.physical_link_speed
         self.physical_link_status = self._mlxLink.physical_link_status
         self.physical_link_recommendation = self._mlxLink.physical_link_recommendation
