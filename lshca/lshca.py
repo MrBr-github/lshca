@@ -2153,6 +2153,8 @@ class DataSource(object):
 
             print("\nlshca started data recording")
             print("output saved in " + self.config.record_tar_file + " file\n")
+            self.tar = tarfile.open(name=self.config.record_tar_file, mode='a')
+
 
             self.stdout = StringIO()
             sys.stdout = self.stdout
@@ -2178,6 +2180,9 @@ class DataSource(object):
             environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
             self.record_data("environment", environment)
             self.record_data("output_fields", self.config.output_order)
+
+            self.tar.close()
+
 
     def exec_shell_cmd(self, cmd, use_cache=False):
         # type: (str, bool) -> list
@@ -2222,10 +2227,7 @@ class DataSource(object):
         tarinfo = tarfile.TarInfo(file_name)
         tarinfo.size = len(p_output)
         tarinfo.mtime = time.time()
-
-        tar = tarfile.open(name=self.config.record_tar_file, mode='a')
-        tar.addfile(tarinfo, tar_contents)
-        tar.close()
+        self.tar.addfile(tarinfo, tar_contents)
 
     def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
         # type: (str, str, bool) -> str
