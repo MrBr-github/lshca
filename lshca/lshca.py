@@ -70,9 +70,6 @@ class Config(object):
 
         self.ver = "3.9"
 
-        self.mst_device_enabled = False
-        self.sa_smp_query_device_enabled = False
-
         self.output_format = "human_readable"
         self.output_format_elastic = None
         self.output_separator_char = "-"
@@ -139,16 +136,6 @@ class Config(object):
                             help="Set human readable output as non elastic")
         parser.add_argument('--no-colour', '--no-color', action='store_false', dest="colour",
                             help="Do not colour warrinings and errors.")
-        parser.add_argument('-s', choices=['lspci', 'sysfs', 'mst', 'sasmpquery'], nargs='+', dest="sources",
-                            help=textwrap.dedent('''\
-                            add optional data sources (comma delimited list)
-                            always on data sources are:
-                              lspci    - provides lspci utility based info. Requires root for full output 
-                              sysfs    - provides driver based info retrieved from /sys/
-                            optional data sources:
-                              mst        - provides MST based info. This data source slows execution
-                              sasmpquery - provides SA/SMP query based info of the IB network
-                            '''))
         parser.add_argument('-o', dest="output_fields_filter_positive", nargs="+",
                             help=textwrap.dedent('''\
                             SELECT fields to output (comma delimited list). Use field names as they appear in output
@@ -183,7 +170,6 @@ class Config(object):
             self.debug = args.debug
 
         if args.view == "ib":
-            self.sa_smp_query_device_enabled = True
             self.output_view = "ib"
         elif args.view == "roce":
             self.output_view = "roce"
@@ -198,8 +184,6 @@ class Config(object):
         elif args.view == "dpu":
             self.output_view = "dpu"
         elif args.view == "all":
-            self.mst_device_enabled = True
-            self.sa_smp_query_device_enabled = True
             self.output_view = "all"
 
         if self.output_view != "all":
@@ -218,17 +202,6 @@ class Config(object):
         if args.json:
             self.output_format = "json"
             self.show_warnings_and_errors = False
-
-        if args.sources:
-            for data_source in args.sources:
-                if data_source == "lspci":
-                    pass
-                elif data_source == "sysfs":
-                    pass
-                elif data_source == "mst":
-                    self.mst_device_enabled = True
-                elif data_source == "sasmpquery":
-                    self.sa_smp_query_device_enabled = True
 
         if args.output_fields_filter_positive:
             self.output_fields_filter_positive = args.output_fields_filter_positive
@@ -823,7 +796,7 @@ class Output(object):
 
 
 class MSTDevice(object):
-    mst_device_enabled = False
+    mst_tool_missing = False
     mst_service_initialized = False
     mst_service_should_be_stopped = False
 
@@ -848,7 +821,7 @@ class MSTDevice(object):
 
     def init_mst_service(self):
         # type: () -> None
-        if MSTDevice.mst_service_initialized:
+        if MSTDevice.mst_service_initialized or MSTDevice.mst_tool_missing:
             return
 
         result = self._data_source.exec_shell_cmd("which mst &> /dev/null ; echo $?", use_cache=True)
@@ -863,17 +836,16 @@ class MSTDevice(object):
                 self._data_source.exec_shell_cmd("mst start", use_cache=True)
                 MSTDevice.mst_service_should_be_stopped = True
             self._data_source.exec_shell_cmd("mst cable add", use_cache=True)
-            MSTDevice.mst_device_enabled = True
         else:
-            print("\n\nError: MST tool is missing\n\n", file=sys.stderr)
+            self._data_source.log.info("MST tool is missing")
             # Disable further use.access to mst device
-            self._config.mst_device_enabled = False
+            MSTDevice.mst_tool_missing = True
 
         MSTDevice.mst_service_initialized = True
 
     def get_data(self, bdf):
         # type: (str) -> None
-        if not MSTDevice.mst_device_enabled:
+        if not MSTDevice.mst_service_initialized:
             return
 
         mst_device_suffix = "None"
@@ -1607,7 +1579,6 @@ class MlnxBDFDevice(object):
         # ------ MST ------
         if self._config.output_view == "cable" or \
           self._config.output_view == "dpu" or \
-          self._config.mst_device_enabled or \
           self._config.output_view == "all":
             self._mstDevice.init_mst_service()
             self._mstDevice.get_data(self.bdf)
@@ -1648,7 +1619,7 @@ class MlnxBDFDevice(object):
         # tempr, driver_ver and bfb_ver are HCA level information. Queried by hca.get_data()
 
         # ------ SA/SMP query ------
-        if self._config.sa_smp_query_device_enabled and self.link_layer == "IB" and self.lnk_state != "down":
+        if (self._config.output_view == "ib" or self._config.output_view == "all") and self.link_layer == "IB" and self.lnk_state != "down":
             self._sasmpQueryDevice.get_data(self.rdma, self.port, self.smlid, self.lnk_state, self.virt_hca)
         self.sw_guid = self._sasmpQueryDevice.sw_guid
         self.sw_description = self._sasmpQueryDevice.sw_description
