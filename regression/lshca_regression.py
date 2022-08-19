@@ -129,7 +129,10 @@ def regression():
             print("No such data source \"" + str(args.data_source[0]) + "\"")
             sys.exit(1)
     else:
-        recorded_data_files_list = os.listdir(rec_data_dir_path)
+        recorded_data_files_list = []
+        for file in  os.listdir(rec_data_dir_path):
+            if file.endswith('.tar'):
+                recorded_data_files_list.append(file)
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
 
