@@ -24,14 +24,6 @@ jobs:
           repository: MrBr-github/lshca_regression_data
           path: recorded_data
 
-      - name: Merge Python ver dependant recorded data
-        run: |
-          set -xv
-          ver=$(python -c 'import sys; print(sys.version_info[0])')
-          if [ "${ver}" == "3" ] ; then
-            cp recorded_data/py${ver}-only/* recorded_data
-          fi
-
       - name: Run regression tests
         run: |
           set -xv

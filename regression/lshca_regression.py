@@ -129,19 +129,30 @@ def regression():
             print("No such data source \"" + str(args.data_source[0]) + "\"")
             sys.exit(1)
     else:
+        file_list = os.listdir(rec_data_dir_path)
+        if sys.version_info.major == 3:
+            p3_only_files = os.listdir(os.path.join(rec_data_dir_path, "py3-only"))
+            p3_only_files = [ os.path.join("py3-only", f) for f in p3_only_files ]
+            file_list.extend(p3_only_files)
+
         recorded_data_files_list = []
-        for file in  os.listdir(rec_data_dir_path):
+        for file in file_list:
             if file.endswith('.tar'):
                 recorded_data_files_list.append(file)
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
 
     if len(recorded_data_files_list) != 0:
-        for recorded_data_file in recorded_data_files_list:
-            if not os.path.isfile(rec_data_dir_path + recorded_data_file):
+        for full_recorded_data_file in recorded_data_files_list:
+            if not os.path.isfile(rec_data_dir_path + full_recorded_data_file):
                 continue
 
-            shutil.copyfile(rec_data_dir_path + recorded_data_file, tmp_dir_name + "/" + recorded_data_file)
+            recorded_data_file = full_recorded_data_file.split('/')[-1]
+            recorded_data_file_prefix = full_recorded_data_file.replace(recorded_data_file, '')
+            shutil.copyfile(
+                os.path.join(rec_data_dir_path, recorded_data_file_prefix, recorded_data_file),
+                os.path.join(tmp_dir_name, recorded_data_file)
+                )
             untared_data_source_dir = tmp_dir_name + "/" + recorded_data_file.replace(".tar", "")
             os.mkdir(untared_data_source_dir)
 
