@@ -1289,8 +1289,8 @@ class SaSmpQueryDevice(object):
         self.sw_description = ""
         self.sm_guid = ""
 
-    def get_data(self, rdma, port, smlid, lnk_state):
-        # type: (str, str, str, str) -> None
+    def get_data(self, rdma, port, smlid, lnk_state, virt_hca):
+        # type: (str, str, str, str, str) -> None
         self._port = port
         self._rdma = rdma
         self._smlid = smlid
@@ -1302,12 +1302,16 @@ class SaSmpQueryDevice(object):
         if "SwDescription" not in self._config.output_order:
             self._config.output_order.append("SwDescription")
 
-        self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " NI -D  0,1")
-        self.sw_guid = self.get_info_from_sa_smp_query_data(".*SystemGuid.*", "\.+(.*)")
-        self.sw_guid = extract_string_by_regex(self.sw_guid, "0x(.*)")
+        self.sw_guid = ''
+        if virt_hca == "Phys":
+            self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " NI -D  0,1")
+            self.sw_guid = self.get_info_from_sa_smp_query_data(".*SystemGuid.*", "\.+(.*)")
+            self.sw_guid = extract_string_by_regex(self.sw_guid, "0x(.*)")
 
-        self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " ND -D  0,1")
-        self.sw_description = self.get_info_from_sa_smp_query_data(".*Node *Description.*", "\.+(.*)")
+        self.sw_description = ''
+        if virt_hca == "Phys":
+            self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " ND -D  0,1")
+            self.sw_description = self.get_info_from_sa_smp_query_data(".*Node *Description.*", "\.+(.*)")
 
         # Get SM lid
         self.sm_guid = ''
@@ -1645,7 +1649,7 @@ class MlnxBDFDevice(object):
 
         # ------ SA/SMP query ------
         if self._config.sa_smp_query_device_enabled and self.link_layer == "IB" and self.lnk_state != "down":
-            self._sasmpQueryDevice.get_data(self.rdma, self.port, self.smlid, self.lnk_state)
+            self._sasmpQueryDevice.get_data(self.rdma, self.port, self.smlid, self.lnk_state, self.virt_hca)
         self.sw_guid = self._sasmpQueryDevice.sw_guid
         self.sw_description = self._sasmpQueryDevice.sw_description
         self.sm_guid = self._sasmpQueryDevice.sm_guid
