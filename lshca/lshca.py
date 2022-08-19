@@ -398,7 +398,7 @@ class HCAManager(object):
         # type: (DataSource, Config) -> None
         self._config = config
         self._data_source = data_source
-        self.mlnxHCAs = []
+        self.mlnxHCAs = [] # type: list[MlnxHCA]
 
     def get_data(self):
         # type: () -> None
@@ -411,7 +411,7 @@ class HCAManager(object):
             if bdf != "=N/A=":
                 mlnx_bdf_list.append(bdf)
 
-        mlnx_bdf_devices = []
+        mlnx_bdf_devices = [] # type: list[MlnxBDFDevice]
         for bdf in mlnx_bdf_list:
             port_count = 1
 
@@ -497,7 +497,7 @@ class HCAManager(object):
         out.print_output()
 
     def _get_hca_by_sys_image_guid(self, sys_image_guid):
-        # type: (str) -> str
+        # type: (str) -> MlnxHCA
         for hca in self.mlnxHCAs:
             if sys_image_guid == hca.sys_image_guid:
                 return hca
