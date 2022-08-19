@@ -440,9 +440,6 @@ class HCAManager(object):
                 rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, self._data_source, self._config)
                 rdma_bond_bdf.get_data()
 
-                bdf_dev.rdma = ""
-                bdf_dev.lnk_state = ""
-
             if bdf_dev.sriov in ("PF", "PF" + self._config.warning_sign, "SF"):
                 hca_found = False
                 for hca in self.mlnxHCAs:
@@ -456,9 +453,14 @@ class HCAManager(object):
                 if not hca_found:
                     if rdma_bond_bdf:
                         hca = MlnxHCA(rdma_bond_bdf, self._config)
+                        hca.get_data(bdf_dev)
+
+                        bdf_dev.rdma = ""
+                        bdf_dev.lnk_state = ""
                         hca.add_bdf_dev(bdf_dev)
                     else:
                         hca = MlnxHCA(bdf_dev,  self._config)
+                        hca.get_data(bdf_dev)
                     hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
 
@@ -1639,9 +1641,7 @@ class MlnxBDFDevice(object):
         self.restric_level = self._mlxPrivHost.restric_level
 
         # ------ Misc ------
-        self.tempr = self._miscDevice.get_tempr(self.rdma)
-        self.driver_ver = self._miscDevice.get_driver_ver()
-        self.bfb_ver = self._miscDevice.get_bfb_version()
+        # tempr, driver_ver and bfb_ver are HCA level information. Queried by hca.get_data()
 
         # ------ SA/SMP query ------
         if self._config.sa_smp_query_device_enabled and self.link_layer == "IB" and self.lnk_state != "down":
@@ -1873,13 +1873,9 @@ class MlnxHCA(object):
         self.sn = bdf_dev.sn
         self.pn = bdf_dev.pn
         self.fw = bdf_dev.fw
-        self.driver_ver = bdf_dev.driver_ver
         self.psid = bdf_dev.psid
         self.sys_image_guid = bdf_dev.sys_image_guid
         self.description = bdf_dev.description
-        self.tempr = bdf_dev.tempr
-        self.dpu_mode = bdf_dev.dpu_mode
-        self.bfb_ver = bdf_dev.bfb_ver
         self._hca_index = None
 
     def __repr__(self):
@@ -1888,6 +1884,14 @@ class MlnxHCA(object):
         for bdf_dev in self.bdf_devices:
             output = output + str(bdf_dev)
         return output
+
+    def get_data(self, bdf_dev):
+        # type: (MlnxBDFDevice) -> None
+        # this function retrieves information thats relevant to the whole HCA, thus reducing executiotion tim on per BDF level
+        self.tempr = bdf_dev._miscDevice.get_tempr(bdf_dev.rdma)
+        self.driver_ver = bdf_dev._miscDevice.get_driver_ver()
+        self.bfb_ver = bdf_dev._miscDevice.get_bfb_version()
+        self.dpu_mode = bdf_dev.dpu_mode
 
     @property
     def hca_index(self):
