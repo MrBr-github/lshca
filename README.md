@@ -11,7 +11,7 @@ It's mainly intended for system administrators, thus defaults configured accordi
   * Bond
   * SRIOV
 * Elastic output - comes to reduce excessive information in human readable output
-* Protocol/feature oriented views: IB, RoCE, Cable, Traffic
+* Protocol/feature oriented views: IB, RoCE, Cable, Traffic, LLDP, DPU
 * Machine readable output: JSON
 * Doesn't requires 3rd party libraries
 * Supports Python 2.7 and 3.x
