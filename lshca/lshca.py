@@ -2137,13 +2137,7 @@ class DataSource(object):
         self.config = config
         self.interfaces_struct = []
 
-        log_formater = logging.Formatter('%(levelname)s - %(message)s')
-        log_handler = logging.StreamHandler()
-        log_handler.setFormatter(log_formater)
-
-        self.log = logging.getLogger("lshcaLogger")
-        self.log.addHandler(log_handler)
-
+        self.logging_stream = sys.stderr
         if self.config.record_data_for_debug is True:
             if not os.path.exists(self.config.record_dir):
                 os.makedirs(self.config.record_dir)
@@ -2155,9 +2149,17 @@ class DataSource(object):
             print("output saved in " + self.config.record_tar_file + " file\n")
             self.tar = tarfile.open(name=self.config.record_tar_file, mode='a')
 
-
             self.stdout = StringIO()
             sys.stdout = self.stdout
+
+            self.logging_stream = StringIO()
+
+        log_formater = logging.Formatter('%(levelname)s - %(message)s')
+        log_handler = logging.StreamHandler(self.logging_stream)
+        log_handler.setFormatter(log_formater)
+
+        self.log = logging.getLogger("lshcaLogger")
+        self.log.addHandler(log_handler)
 
     def __del__(self):
         # type: () -> None
@@ -2169,6 +2171,7 @@ class DataSource(object):
                 args_str = ""
             self.record_data("cmd", "lshca " + args_str)
             self.record_data("output", self.stdout.getvalue())
+            self.record_data("errors", self.logging_stream.getvalue())
 
             self.config.record_data_for_debug = False
             environment = list()
@@ -2190,7 +2193,7 @@ class DataSource(object):
 
         if use_cache is True and cache_key in self.cache:
             output = self.cache[cache_key]
-
+            error = ""
         else:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, executable="/bin/bash")
             output, error = process.communicate()
@@ -2209,25 +2212,29 @@ class DataSource(object):
         output = output.splitlines()
         if self.config.record_data_for_debug is True:
             cmd = "shell.cmd/" + cmd
-            self.record_data(cmd, output)
+            self.record_data(cmd, output, error)
 
         return output
 
-    def record_data(self, cmd, output):
-        # type: (str, list) -> None
-        p_output = pickle.dumps(output)
+    def record_data(self, cmd, output, error=""):
+        # type: (str, list, str) -> None
+        self.record_data_to_tar(cmd, output)
+        if error:
+            self.record_data_to_tar('{}__ERROR'.format(cmd), error)
 
-        if sys.version_info.major == 3:
-            tar_contents = BytesIO(p_output)
-        else:
-            tar_contents = StringIO(p_output)
+    def record_data_to_tar(self, file_name, data):
+        # type: (str, str) -> None
+            p_data = pickle.dumps(data)
 
-        file_name = cmd
+            if sys.version_info.major == 3:
+                tar_contents = BytesIO(p_data)
+            else:
+                tar_contents = StringIO(p_data)
 
-        tarinfo = tarfile.TarInfo(file_name)
-        tarinfo.size = len(p_output)
-        tarinfo.mtime = time.time()
-        self.tar.addfile(tarinfo, tar_contents)
+            tarinfo = tarfile.TarInfo(file_name)
+            tarinfo.size = len(p_data)
+            tarinfo.mtime = time.time()
+            self.tar.addfile(tarinfo, tar_contents)
 
     def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
         # type: (str, str, bool) -> str
