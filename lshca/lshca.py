@@ -2189,14 +2189,23 @@ class DataSource(object):
 
     def exec_shell_cmd(self, cmd, use_cache=False):
         # type: (str, bool) -> list
+        timeout = 10
         cache_key = self.cmd_to_str(cmd)
 
         if use_cache is True and cache_key in self.cache:
             output = self.cache[cache_key]
             error = ""
         else:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, executable="/bin/bash")
+            # using shell timeout, because python subprocess timeout requres Python 3.3+
+            cmd_with_timeout = "timeout {} {}".format(timeout, cmd)
+            process = subprocess.Popen(cmd_with_timeout,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    shell=True,
+                                    executable="/bin/bash")
             output, error = process.communicate()
+            if process.returncode == 124:
+                self.log.error('Following cmd failed due to timeout of {}s.\n\tCMD: {}'.format(timeout, cmd))
             if error:
                 if isinstance(error, bytes):
                     error = error.decode()
