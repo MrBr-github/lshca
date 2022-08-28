@@ -964,6 +964,8 @@ class SYSFSDevice(object):
             self._sys_prefix += "/" + sf
             self.is_sf = True
 
+        self.driver = "Undefined"
+
     def __repr__(self):
         # type: () -> str
         delim = " "
@@ -973,10 +975,25 @@ class SYSFSDevice(object):
                self.vfParent + delim + \
                self.numa
 
+    def __getattr__(self, item):
+        '''
+            There is no data that can be rettrieved from SysFS if the BDF was assigned to VM
+            And I don't want to set all of the atributes in the constructor
+            This comes to return emty string, as it actualy happnes, to all atributes beside RDMA and SRIOV
+        '''
+        if self.driver == "vfio-pci":
+            return ""
+        else:
+            raise AttributeError(item)
+
     def get_data(self):
         # type: () -> None
+        tmp = self._data_source.read_link_if_exists(self._sys_prefix + '/driver')
+        self.driver = extract_string_by_regex(tmp, '.*/([-_A-Za-z0-9]*)')
+
         self._data_source.log.debug("BDF:{} Port:{} SysFS path prefix:{}".format(self._bdf, self._port, self._sys_prefix ))
-        if not self._data_source.list_dir_if_exists("{}/infiniband/".format(self._sys_prefix)):
+        if not self._data_source.list_dir_if_exists("{}/infiniband/".format(self._sys_prefix)) and \
+          self.driver != "vfio-pci":
             self._data_source.log.error("Sysfs data for {} PCI address is missing. Check for driver or fw issues. Start from dmesg".format(self._bdf))
 
         vf_parent_file = self._data_source.read_link_if_exists(self._sys_prefix + "/physfn")
@@ -990,11 +1007,18 @@ class SYSFSDevice(object):
         if self.is_sf:
             self.sriov = "SF"
 
+        if self.driver == "vfio-pci":
+            self.rdma = "inUseByVM"
+            if self._config.show_warnings_and_errors is True:
+                self.rdma = self.rdma + self._config.warning_sign
+            return
+        else:
+            self.rdma = self._data_source.list_dir_if_exists(self._sys_prefix + "/infiniband/").rstrip()
+
         self.numa = self._data_source.read_file_if_exists(self._sys_prefix + "/numa_node").rstrip()
         if not self.numa and not self.is_sf:
             print("Warning: " + self._bdf + " has no NUMA assignment", file=sys.stderr)
 
-        self.rdma = self._data_source.list_dir_if_exists(self._sys_prefix + "/infiniband/").rstrip()
         net_list = self._data_source.list_dir_if_exists(self._sys_prefix + "/net/")
         self.net = ""
         matched_net_list = []
