@@ -1509,7 +1509,7 @@ class MiscCMDs(object):
             return "=N/A="
 
     def get_driver_ver(self):
-        # type: (str) -> str
+        # type: () -> str
         mofed_ver = str(self.data_source.exec_shell_cmd("ofed_info -s ", use_cache=True))
         regex = '.*MLNX_OFED_LINUX-(.*):.*'
         mofed_ver = extract_string_by_regex(mofed_ver, regex)
@@ -1525,8 +1525,10 @@ class MiscCMDs(object):
         else:
             return "N/A"
 
-    def get_bfb_version(self):
-        # type: () -> str
+    def get_bfb_version(self, inside_dpu):
+        # type: (bool) -> str
+        if not inside_dpu:
+            return ""
         ver = self.data_source.read_file_if_exists("/etc/mlnx-release", use_cache=True)
         return ver.strip()
 
@@ -1696,11 +1698,9 @@ class MlnxBDFDevice(object):
 
     def _get_if_inside_dpu(self, pci_tree):
         # type: (list) -> None
-        for bdf in pci_tree:
-            result = extract_string_by_regex(bdf, "(0000:00:00.0) (.+)")
-            if result != "=N/A=":
-                self._inside_dpu = True
-                return
+        result = find_in_list(pci_tree, "(0000:00:00.0) (.+)")
+        if result != "=N/A=":
+            self._inside_dpu = True
 
     def __repr__(self):
         # type: () -> str
@@ -1889,7 +1889,7 @@ class MlnxHCA(object):
         # this function retrieves information thats relevant to the whole HCA, thus reducing executiotion tim on per BDF level
         self.tempr = bdf_dev._miscDevice.get_tempr(bdf_dev.rdma)
         self.driver_ver = bdf_dev._miscDevice.get_driver_ver()
-        self.bfb_ver = bdf_dev._miscDevice.get_bfb_version()
+        self.bfb_ver = bdf_dev._miscDevice.get_bfb_version(bdf_dev._inside_dpu)
         self.dpu_mode = bdf_dev.dpu_mode
 
     @property
