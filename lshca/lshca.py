@@ -377,7 +377,8 @@ class HCAManager(object):
         # type: () -> None
         mlnx_bdf_list = []
         # Same lspci cmd used in MST source in order to benefit from cache
-        raw_mlnx_bdf_list = self._data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True)
+        data = self._data_source.exec_shell_cmd("lspci -vvvDnnd 15b3:", use_cache=True)
+        raw_mlnx_bdf_list = find_in_list(data, r'^0000:[0-9a-f]{2}:.*', return_only_first_group=False)
         for member in raw_mlnx_bdf_list:
             bdf = extract_string_by_regex(member, "(.+) (Ethernet|Infini[Bb]and|Network)")
 
@@ -873,7 +874,7 @@ class PCIDevice(object):
 
     def get_data(self):
         # type: () -> None
-        self._data = self._data_source.exec_shell_cmd("lspci -vvvDnn -s" + self._bdf, use_cache=True)
+        self._data = self._data_source.get_bdf_data_from_lspci(self._bdf)
         # Handling following string, taking reset of string after HCA type
         # 0000:01:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
         self.description = self.get_info_from_lspci_data("^[0-9].*", str(self._bdf) + "[^:]+: (.+?)(?= \[[a-f0-9]{4}:[a-f0-9]{4}\]|$)")
@@ -1556,7 +1557,7 @@ class MlnxBDFDevice(object):
 
     def get_data(self):
         # type: () -> None
-        self._get_if_inside_dpu(self._data_source.exec_shell_cmd("lspci -Dd 15b3:", use_cache=True))
+        self._get_if_inside_dpu(self._data_source.exec_shell_cmd("lspci -Dd  15b3: -s 0000:00:00.0", use_cache=True))
 
         # ------ SysFS ------
         self._sysFSDevice.get_data()
@@ -2211,8 +2212,8 @@ class DataSource(object):
             self.tar.close()
 
 
-    def exec_shell_cmd(self, cmd, use_cache=False):
-        # type: (str, bool) -> list
+    def exec_shell_cmd(self, cmd, use_cache=False, splitlines=True):
+        # type: (str, bool, bool) -> list
         timeout = 10
         cache_key = self.cmd_to_str(cmd)
 
@@ -2242,11 +2243,42 @@ class DataSource(object):
             if use_cache is True:
                 self.cache.update({cache_key: output})
 
-        output = output.splitlines()
+        if splitlines:
+            output = output.splitlines()
+
         if self.config.record_data_for_debug is True:
             cmd = "shell.cmd/" + cmd
             self.record_data(cmd, output, error)
 
+        return output
+
+    def get_bdf_data_from_lspci(self, bdf, use_cache=True):
+        # type: (str, bool) -> dict
+        cmd = "lspci -vvvDnnd 15b3:"
+
+        lspci_dict_cache_key = self.cmd_to_str(cmd + "lspci_dictionary")
+        if use_cache is True and lspci_dict_cache_key in self.cache:
+            d_output = self.cache[lspci_dict_cache_key]
+        else:
+            lspci_cache_key = self.cmd_to_str(cmd)
+            if use_cache is True and lspci_cache_key in self.cache:
+                data = self.cache[lspci_cache_key]
+            else:
+                data = self.exec_shell_cmd(cmd, use_cache=True, splitlines=False)
+
+                if use_cache is True:
+                    self.cache.update({lspci_cache_key: data})
+
+            l_output = data.strip().split("\n\n")
+
+            d_output = {}
+            for raw_bdf in l_output:
+                d_output[raw_bdf.split(" ")[0]] = raw_bdf
+
+            if use_cache is True:
+                self.cache.update({lspci_dict_cache_key: d_output})
+
+        output = d_output.get(bdf).splitlines()
         return output
 
     def record_data(self, cmd, output, error=""):
