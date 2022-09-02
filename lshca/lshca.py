@@ -907,6 +907,11 @@ class PCIDevice(object):
         elif self._lnkCapSpeed != self._lnkStaSpeed and self._config.show_warnings_and_errors is True:
             self.lnkStaWidth = str(self.lnkStaWidth) + self._config.warning_sign
 
+        self._inside_dpu = False
+        root_device_made_by_mellanox = self._data_source.get_bdf_data_from_lspci("0000:00:00.0")
+        if root_device_made_by_mellanox:
+            self._inside_dpu = True
+
     def __repr__(self):
         # type: () -> str
         delim = " "
@@ -1541,8 +1546,6 @@ class MlnxBDFDevice(object):
         self._config = config
         self._data_source = data_source
 
-        self._inside_dpu = False
-
         self._sysFSDevice = SYSFSDevice(self.bdf, self._data_source, self._config, port, sf)
         self._pciDevice = PCIDevice(self.bdf, self._data_source, self._config)
         self._mstDevice = MSTDevice(self._data_source, self._config)
@@ -1557,7 +1560,6 @@ class MlnxBDFDevice(object):
 
     def get_data(self):
         # type: () -> None
-        self._get_if_inside_dpu(self._data_source.exec_shell_cmd("lspci -Dd  15b3: -s 0000:00:00.0", use_cache=True))
 
         # ------ SysFS ------
         self._sysFSDevice.get_data()
@@ -1592,10 +1594,12 @@ class MlnxBDFDevice(object):
 
         # ------ PCI ------
         self._pciDevice.get_data()
+        self._inside_dpu = self._pciDevice._inside_dpu
         self.description = self._pciDevice.description
         self.lnkCapWidth = self._pciDevice.lnkCapWidth
         self.lnkStaWidth = self._pciDevice.lnkStaWidth
         self.pci_device_id = self._pciDevice.pci_device_id
+
 
         if self.sriov == "VF":
             self.lnkCapWidth = ""
@@ -1696,12 +1700,6 @@ class MlnxBDFDevice(object):
             return True
         else:
             return False
-
-    def _get_if_inside_dpu(self, pci_tree):
-        # type: (list) -> None
-        result = find_in_list(pci_tree, "(0000:00:00.0) (.+)")
-        if result != "=N/A=":
-            self._inside_dpu = True
 
     def __repr__(self):
         # type: () -> str
@@ -2278,7 +2276,7 @@ class DataSource(object):
             if use_cache is True:
                 self.cache.update({lspci_dict_cache_key: d_output})
 
-        output = d_output.get(bdf).splitlines()
+        output = d_output.get(bdf, "").splitlines()
         return output
 
     def record_data(self, cmd, output, error=""):
