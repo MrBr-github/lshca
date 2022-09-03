@@ -7,6 +7,7 @@ import tempfile
 import shutil
 import difflib
 import traceback
+from packaging import version
 
 regr_home = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(regr_home + '/../')
@@ -27,6 +28,10 @@ class DataSourceRecorded(DataSource):
             if cmd and 'lspci -vvvDnn -s' in cmd:
                 altered_cmd = cmd.replace('lspci -vvvDnn -s', 'lspci -vvvD -s')
                 output, error = self.read_cmd_output_from_file(cmd_prefix, altered_cmd)
+            elif cmd and 'lspci -vvvDnnd 15b3:' in cmd:
+                # Used to identify mellanox bdfs in version < 3.9
+                altered_cmd = cmd.replace('lspci -vvvDnnd 15b3:', 'lspci -Dd 15b3:')
+                output, error = self.read_cmd_output_from_file(cmd_prefix, altered_cmd)
             elif self.config.skip_missing:
                 output = ""
                 error = ""
@@ -35,13 +40,23 @@ class DataSourceRecorded(DataSource):
 
         return output, error
 
-    def exec_shell_cmd(self, cmd, use_cache=False):
+    def exec_shell_cmd(self, cmd, use_cache=False, splitlines=True):
         # use_cache is here for compatibility only
         output, error = self.read_cmd_output_from_file("/shell.cmd/", cmd)
         if error:
             self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
 
         return output
+
+    def get_bdf_data_from_lspci(self, bdf, use_cache=False):
+        # type: (str, bool) -> dict
+
+        if version.parse(self.config.recorded_lshca_version) >= version.parse("3.9"):
+            super(DataSourceRecorded, self).get_bdf_data_from_lspci(bdf)
+        else:
+            # comes to compensate on missing get_bdf_data_from_lspci information in recordings by versions < 3.9
+            output = self.exec_shell_cmd("lspci -vvvDnn -s" + bdf)
+            return output
 
     def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
         output, error = self.read_cmd_output_from_file("/os.path.exists/", file_to_read + record_suffix)
@@ -89,6 +104,7 @@ class BColors:
 class RegressionConfig(Config):
     def __init__(self):
         self.skip_missing = False
+        self.recorded_lshca_version = "0"
         super(RegressionConfig, self).__init__()
 
 
@@ -199,6 +215,13 @@ def regression():
                     recorded_sys_args.append("-o")
                     recorded_sys_args.append(",".join(recorded_output_fields))
 
+            f = open(untared_data_source_dir + "/environment", "rb")
+            tmp = pickle.load(f)
+            for item in tmp:
+                if 'LSHCA:' in item:
+                    recorded_lshca_version = item.split(" ")[1]
+                    break
+
             stdout = StringIO()
             sys.stdout = stdout
 
@@ -211,6 +234,7 @@ def regression():
             try:
                 regression_conf = RegressionConfig()
                 regression_conf.skip_missing = args.skip_missing
+                regression_conf.recorded_lshca_version = recorded_lshca_version
                 main(untared_data_source_dir, recorded_sys_args, regression_conf)
                 lshca_output = stdout
                 lshca_errors = stderr
