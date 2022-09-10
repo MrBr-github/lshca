@@ -2241,12 +2241,12 @@ class DataSource(object):
             if use_cache is True:
                 self.cache.update({cache_key: output})
 
-        if splitlines:
-            output = output.splitlines()
-
         if self.config.record_data_for_debug is True:
             cmd = "shell.cmd/" + cmd
             self.record_data(cmd, output, error)
+
+        if splitlines:
+            output = output.splitlines()
 
         return output
 

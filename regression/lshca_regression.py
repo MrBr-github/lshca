@@ -46,17 +46,21 @@ class DataSourceRecorded(DataSource):
         if error:
             self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
 
+        # splitlines parameter added in version 3.9, before that everything was splitted and recorded in this state
+        if version.parse(self.config.recorded_lshca_version) >= version.parse("3.9"):
+            if splitlines:
+                output = output.splitlines()
+
         return output
 
     def get_bdf_data_from_lspci(self, bdf, use_cache=False):
         # type: (str, bool) -> dict
-
         if version.parse(self.config.recorded_lshca_version) >= version.parse("3.9"):
-            super(DataSourceRecorded, self).get_bdf_data_from_lspci(bdf)
+            output = super(DataSourceRecorded, self).get_bdf_data_from_lspci(bdf)
         else:
             # comes to compensate on missing get_bdf_data_from_lspci information in recordings by versions < 3.9
             output = self.exec_shell_cmd("lspci -vvvDnn -s" + bdf)
-            return output
+        return output
 
     def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
         output, error = self.read_cmd_output_from_file("/os.path.exists/", file_to_read + record_suffix)
@@ -246,7 +250,7 @@ def regression():
                 sys.stderr = sys.__stderr__
 
             print('**************************************************************************************')
-            print(BColors.BOLD + 'Recorded data file: ' + str(recorded_data_file) + BColors.ENDC)
+            print(BColors.BOLD + 'Recorded data file: ' + str(full_recorded_data_file) + BColors.ENDC)
             print("Command: " + " ".join(recorded_sys_args))
             print('**************************************************************************************')
             try:

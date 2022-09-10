@@ -24,6 +24,10 @@ jobs:
           repository: MrBr-github/lshca_regression_data
           path: recorded_data
 
+      - name: Install python regression prerequisites
+        run:
+          python -m pip install -r regression/requirements.txt
+
       - name: Run regression tests
         run: |
           set -xv
