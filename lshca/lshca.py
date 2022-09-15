@@ -1682,9 +1682,9 @@ class MlnxBDFDevice(object):
             ( self.sriov == "PF" and self.bond_master != "=N/A=" and self.bond_master != "") \
           ):
             if self._inside_dpu and self.uplnk_repr:
-                self._lldpData.get_data(self.uplnk_repr, self.ip_state)
+                self._lldpData.get_data(self.uplnk_repr, self.ip_state, self.bond_master)
             else:
-                self._lldpData.get_data(self.net, self.ip_state)
+                self._lldpData.get_data(self.net, self.ip_state, self.bond_master)
 
         self.llpd_port_id = self._lldpData.port_id
         self.llpd_system_name =  self._lldpData.system_name
@@ -2069,7 +2069,9 @@ class LldpData:
         else:
             return
 
-        if meta[0] != self._interface:
+        # In bonds from Mofed5.7 the reciving interface of the packet will be bond and not the actual interface
+        if meta[0] != self._interface and \
+          self._bond_master != "=N/A=" and meta[0] != self._bond_master:
             self.lldp_err_msg("InterfaceMismatch", self._config.error_sign)
             return
 
@@ -2129,12 +2131,13 @@ class LldpData:
         self.system_description = msg
         self.mgmt_addr = msg
 
-    def get_data(self, net, ip_state):
-        # type: (str, str) -> None
+    def get_data(self, net, ip_state, bond_master):
+        # type: (str, str, str) -> None
         if sys.version_info[0] < 3:
             raise Exception("Getting LLDP data requires Python3")
 
         self._interface = net
+        self._bond_master = bond_master
 
         if ip_state == "" or net == "":
             self.lldp_err_msg("LnkStatUnclr", self._config.warning_sign)
