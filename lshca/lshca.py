@@ -39,7 +39,7 @@ except ImportError:
 class Config(object):
     def __init__(self):
         # type: () -> None
-        self.debug = 0
+        self.log_level = "" # set by argparse
 
         self.output_view = "system"
         self.output_order_general = {
@@ -107,7 +107,7 @@ class Config(object):
 
         parser.add_argument('-hh', action='store_true', dest="extended_help",
                             help="show extended help message and exit. All fields description and more")
-        parser.add_argument('-d', type=int, default='0', dest="debug", help="run with debug outputs")
+        parser.add_argument('--log-level', choices=['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'], default='ERROR',  help="Set level of logging output")
         parser.add_argument('-j', action='store_true', dest="json",
                             help="output data as JSON, affected by output selection flag")
         parser.add_argument('-v', '--version', action='version', version=str('%(prog)s ver. ' + self.ver))
@@ -166,8 +166,7 @@ class Config(object):
         if args.mode == "record":
             self.record_data_for_debug = True
 
-        if args.debug:
-            self.debug = args.debug
+        self.log_level = getattr(logging, args.log_level.upper())
 
         if args.view == "ib":
             self.output_view = "ib"
@@ -2184,7 +2183,9 @@ class DataSource(object):
         log_handler = logging.StreamHandler(self.logging_stream)
         log_handler.setFormatter(log_formater)
 
+        log_handler.setLevel(self.config.log_level)
         self.log = logging.getLogger("lshcaLogger")
+        self.log.setLevel(self.config.log_level)
         self.log.addHandler(log_handler)
 
     def __del__(self):
