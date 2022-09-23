@@ -464,7 +464,7 @@ class HCAManager(object):
 
     def display_hcas_info(self):
         # type: () -> None
-        out = Output(self._config)
+        out = Output(self._config, self._data_source)
         for hca in self.mlnxHCAs:
             output_info = hca.output_info()
             out.append(output_info)
@@ -480,9 +480,10 @@ class HCAManager(object):
 
 
 class Output(object):
-    def __init__(self, config):
-        # type: (Config) -> None
+    def __init__(self, config, data_source):
+        # type: (Config, DataSource) -> None
         self.config = config
+        self.data_source = data_source
         self.output = []
         self.column_width = {}
         self.separator = ""
@@ -525,7 +526,14 @@ class Output(object):
         if not self.config.where_output_filter:
             return
 
-        output_filter = dict(item.split("=") for item in self.config.where_output_filter)
+        output_filter = {}
+        for filter_item in self.config.where_output_filter:
+            f_list = filter_item.split("=")
+            if len(f_list) != 2:
+                self.data_source.log.critical("Filter '{}' is illegal, see help for more info".format(filter_item))
+                sys.exit(1)
+            output_filter[f_list[0]] = f_list[1]
+
         for filter_key in output_filter:
             try:
                 output_filter[filter_key] = re.compile(output_filter[filter_key])
