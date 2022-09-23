@@ -2236,7 +2236,7 @@ class DataSource(object):
             if error:
                 if isinstance(error, bytes):
                     error = error.decode()
-                error = error.strip()
+                error = re.sub(r'timeout: ', '', error.strip())
                 self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
             if isinstance(output, bytes):
                 output = output.decode('utf8')
