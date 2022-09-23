@@ -425,14 +425,14 @@ class HCAManager(object):
 
                 if not hca_found:
                     if rdma_bond_bdf:
-                        hca = MlnxHCA(rdma_bond_bdf, self._config)
+                        hca = MlnxHCA(rdma_bond_bdf, self._config, self._data_source)
                         hca.get_data(bdf_dev)
 
                         bdf_dev.rdma = ""
                         bdf_dev.lnk_state = ""
                         hca.add_bdf_dev(bdf_dev)
                     else:
-                        hca = MlnxHCA(bdf_dev,  self._config)
+                        hca = MlnxHCA(bdf_dev,  self._config, self._data_source)
                         hca.get_data(bdf_dev)
                     hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
@@ -1865,10 +1865,11 @@ class MlnxBDFDevice(object):
 
 
 class MlnxHCA(object):
-    def __init__(self, bdf_dev, config):
-        # type: (MlnxBDFDevice, Config) -> None
-        self.bdf_devices = []
+    def __init__(self, bdf_dev, config, data_source):
+        # type: (MlnxBDFDevice, Config, DataSource) -> None
+        self.bdf_devices = [] #  type: list[MlnxBDFDevice]
         self.config = config
+        self.data_source = data_source
 
         if bdf_dev.sriov in ("PF", "PF" + self.config.warning_sign):
             self.bdf_devices.append(bdf_dev)
@@ -1916,6 +1917,12 @@ class MlnxHCA(object):
                     self.bdf_devices.insert(i + 1, new_bdf_dev)
                     break
         else:
+            for bdf_dev in self.bdf_devices:
+                if bdf_dev.net == new_bdf_dev.net and type(new_bdf_dev) == MlnxRdmaBondDevice:
+                    msg = 'Multiple RDMA interfaces are members of {}{}{}. '.format(BColors.WARNING, bdf_dev.net, BColors.ENDC)
+                    msg += 'It seems that creation of single bond RDMA interface failed. Check configuration'
+                    self.data_source.log.error(msg)
+                    return
             self.bdf_devices.append(new_bdf_dev)
 
     def output_info(self):
