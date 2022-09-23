@@ -2238,9 +2238,8 @@ class DataSource(object):
                     error = error.decode()
                 error = error.strip()
                 self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
-
             if isinstance(output, bytes):
-                output = output.decode()
+                output = output.decode('utf8')
 
             if use_cache is True:
                 self.cache.update({cache_key: output})
