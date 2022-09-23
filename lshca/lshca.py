@@ -1968,8 +1968,7 @@ class MlnxRdmaBondDevice(MlnxBDFDevice):
 
     def _fix_rdma_bond(self):
         # type: () -> None
-        index = extract_string_by_regex(self.rdma, ".*([0-9]+)$")
-        self.bdf = "rdma_bond_" + index
+        self.bdf = "rdma_" + re.sub(r'([0-9]+)', r'_\1' , self.bond_master)
         self.net = self.bond_master
         self.bond_master = ""
         self.bond_mii_status = ""
