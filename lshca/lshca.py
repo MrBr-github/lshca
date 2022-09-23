@@ -1093,7 +1093,7 @@ class SYSFSDevice(object):
 
         self.port_rate = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma + "/ports/" +
                                                          self._port + "/rate")
-        self.port_rate = extract_string_by_regex(self.port_rate, "([0-9]*) .*", "")
+        self.port_rate = extract_string_by_regex(self.port_rate, "([0-9\.]*) .*", "")
         if self.lnk_state == "down" and self._config.show_warnings_and_errors is True:
             self.port_rate = self.port_rate + self._config.warning_sign
 
