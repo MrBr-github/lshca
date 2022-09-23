@@ -1034,6 +1034,9 @@ class SYSFSDevice(object):
 
         net_list = self._data_source.list_dir_if_exists(self._sys_prefix + "/net/")
         self.net = ""
+        self.uplnk_repr = ""
+        self.pf_repr = ""
+        self.vf_repr = ""
         matched_net_list = []
         for net in net_list.split(" "):
             # the below code tries to identify which of the files has valid port number dev_id or dev_port
@@ -1061,10 +1064,14 @@ class SYSFSDevice(object):
             net_port += 1
 
             if str(net_port) == self._port:
-                # similar regexes used in OvsVctl
-                if re.match(r"^p\d+$", net) or re.match(r"^pf\d+hpf$", net) or re.match(r"^pf\d+vf\d+$", net):
-                    continue
-                matched_net_list.append(net)
+                if re.match(r"^p\d+$", net):
+                    self.uplnk_repr = net
+                elif re.match(r"^pf\d+hpf$", net):
+                    self.pf_repr = net
+                elif re.match(r"^pf\d+vf\d+$", net):
+                    self.vf_repr = net
+                else:
+                    matched_net_list.append(net)
 
         self.net = " ".join(matched_net_list)
 
@@ -1456,32 +1463,10 @@ class OvsVsctl(object):
             ovsvctl_list_ports = self._data_source.exec_shell_cmd("ovs-vsctl list-ports {}".format(bridge), use_cache=True)
             data[bridge] = ovsvctl_list_ports
 
-        ovs_bridge = ""
-        uplnk_repr = ""
-        pf_repr = ""
-        vf_repr = ""
-
-        bridge_found = False
         for bridge in data:
-            ovs_bridge = bridge
             for br_net in data[bridge]:
                 if br_net == net:
-                    bridge_found = True
-                # similar regexes used in SYSFSDevice
-                if re.match(r"^p\d+$", br_net):
-                    uplnk_repr = br_net
-                if re.match(r"^pf\d+hpf$", br_net):
-                    pf_repr = br_net
-                if re.match(r"^pf\d+vf\d+$", br_net):
-                    vf_repr = br_net
-            if bridge_found:
-                break
-
-        if bridge_found:
-            self.ovs_bridge = ovs_bridge
-            self.uplnk_repr = uplnk_repr
-            self.pf_repr = pf_repr
-            self.vf_repr = vf_repr
+                    self.ovs_bridge = bridge
 
 
 class MiscCMDs(object):
@@ -1598,6 +1583,9 @@ class MlnxBDFDevice(object):
         self.traff_rx_bitps = self._sysFSDevice.traff_rx_bitps
         self.packet_seq_err_per_sec = self._sysFSDevice.packet_seq_err_per_sec
         self.sf_list = self._sysFSDevice.sf_list
+        self.pf_repr = self._sysFSDevice.pf_repr
+        self.vf_repr = self._sysFSDevice.vf_repr
+        self.uplnk_repr = self._sysFSDevice.uplnk_repr
 
         # ------ PCI ------
         self._pciDevice.get_data()
@@ -1673,12 +1661,10 @@ class MlnxBDFDevice(object):
             self.packet_seq_err_per_sec = self._sysFSDevice.packet_seq_err_per_sec
 
         # ------ OVS Vctl ------
-        if self._inside_dpu and (self._config.output_view == "dpu" or self._config.output_view == "lldp" or self._config.output_view == "all"):
+        if self._inside_dpu and self.sriov == "PF" and \
+          (self._config.output_view == "dpu" or self._config.output_view == "all"):
             self._ovsVsctl.get_data(self.net)
         self.ovs_bridge = self._ovsVsctl.ovs_bridge
-        self.pf_repr = self._ovsVsctl.pf_repr
-        self.vf_repr = self._ovsVsctl.vf_repr
-        self.uplnk_repr = self._ovsVsctl.uplnk_repr
 
         # ------ LLDP ------
         if ( self._config.output_view == "lldp" or self._config.output_view == "all" ) and \
