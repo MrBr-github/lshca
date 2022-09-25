@@ -33,4 +33,4 @@ jobs:
         run: |
           set -xv
           rm -rf recorded_data/.git
-          python regression/lshca_regression.py --skip-missing --display-recorded-fields
+          python regression/lshca_regression.py --skip-missing --display-recorded-fields --remove-separators
