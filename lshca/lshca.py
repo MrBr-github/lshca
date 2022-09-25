@@ -107,7 +107,8 @@ class Config(object):
 
         parser.add_argument('-hh', action='store_true', dest="extended_help",
                             help="show extended help message and exit. All fields description and more")
-        parser.add_argument('--log-level', choices=['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'], default='ERROR',  help="Set level of logging output")
+        parser.add_argument('--log-level', choices=['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'], default='ERROR',
+                            type = str.upper, help="Set level of logging output")
         parser.add_argument('-j', action='store_true', dest="json",
                             help="output data as JSON, affected by output selection flag")
         parser.add_argument('-v', '--version', action='version', version=str('%(prog)s ver. ' + self.ver))
@@ -166,7 +167,7 @@ class Config(object):
         if args.mode == "record":
             self.record_data_for_debug = True
 
-        self.log_level = getattr(logging, args.log_level.upper())
+        self.log_level = getattr(logging, args.log_level)
 
         if args.view == "ib":
             self.output_view = "ib"
