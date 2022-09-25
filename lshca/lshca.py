@@ -679,7 +679,29 @@ class Output(object):
 
     def update_separator_and_column_width(self):
         # type: () -> None
-        line_width = 0
+        # function calculates self.column_width values and self.separator_len
+
+        # first pass: collect all of the maximum widths for each of the BDF fields
+        hca_field_line_width = 0
+        for hca in self.output:
+            for key in hca:
+                if key == "bdf_devices":
+                    for bdf_device in hca["bdf_devices"]:
+                        for bdf_key in bdf_device:
+                            if bdf_key in self.output_order:
+                                # decide what is longer the key name or it's value
+                                if len(bdf_device[bdf_key]) > len(bdf_key):
+                                    width = len(bdf_device[bdf_key])
+                                else:
+                                    width = len(bdf_key)
+
+                                if bdf_key not in self.column_width:
+                                    self.column_width[bdf_key] = width
+
+                                if width > self.column_width[bdf_key]:
+                                    self.column_width[bdf_key] = width
+
+        # second pass: calculate width of BDF and HCA lines
         for hca in self.output:
             curr_hca_column_width = {}
             for key in hca:
@@ -687,25 +709,23 @@ class Output(object):
                     for bdf_device in hca["bdf_devices"]:
                         for bdf_key in bdf_device:
                             if bdf_key in self.output_order:
-                                if len(bdf_device[bdf_key]) > len(bdf_key):
-                                    width = len(bdf_device[bdf_key])
-                                else:
-                                    width = len(bdf_key)
-
-                                if bdf_key not in self.column_width or \
-                                        len(bdf_device[bdf_key]) > self.column_width[bdf_key]:
-                                    self.column_width[bdf_key] = width
-                                if bdf_key not in curr_hca_column_width or \
-                                        len(bdf_device[bdf_key]) > curr_hca_column_width[bdf_key]:
-                                    curr_hca_column_width[bdf_key] = width
+                                curr_hca_column_width[bdf_key] = self.column_width[bdf_key]
+                        # It's enough to loop over single BDF to set field width
+                        break
                 else:
-                    current_width = len(key) + len(str(hca[key])) + 5
-                    if line_width < current_width:
-                        line_width = current_width
+                    # The +2 is for ': ' in HCA spesific fields
+                    # The +1 is for '^ ' indentation in HCA spesific fields
+                    # The +1 is for the looks
+                    current_width = len(key) + len(str(hca[key])) + 2 + 1 + 1
+                    if hca_field_line_width < current_width:
+                        hca_field_line_width = current_width
 
-            bdf_device_line_width = sum(curr_hca_column_width.values()) + len(curr_hca_column_width) * 3 - 2
 
-            self.separator_len = max(self.separator_len, bdf_device_line_width, line_width)
+            # width summary of all the fields +
+            # number of all fields multipplied by number of padding charactes between them
+            # The +1 is for the looks
+            bdf_device_line_width = sum(curr_hca_column_width.values()) + (len(curr_hca_column_width) - 1 ) * 3 + 1
+            self.separator_len = max(self.separator_len, bdf_device_line_width, hca_field_line_width)
 
     def print_output(self):
         # type: () -> None
