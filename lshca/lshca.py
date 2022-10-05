@@ -55,8 +55,8 @@ class Config(object):
                     "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps", "PktSeqErr"],
                     "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
-                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode", "BFBver", "OvsBrdg",
-                             "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr", "SRIOV"]
+                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode", "BFBver", "RshimDev",
+                            "OvsBrdg", "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr", "SRIOV"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
@@ -337,6 +337,7 @@ class Config(object):
                 Separated - network function is assigned to both the Arm cores and the x86 host cores. Traffic reaches both of them
                 Undefined - Failed to identify DPU operation mode
           BFBver    - version of DPU BFB image. Works ONLY within the DPU os
+          RshimDev  - /dev/rshimN device for this DPU, requires loaded rhsim driver
           UplnkRepr - Uplink representor
           PfRepr    - PF representors
           VfRepr    - VF representors
@@ -659,6 +660,10 @@ class Output(object):
                 # ---- Remove BFBver if it has no value and the HCA is not DPU
                 if hca.get("BFBver") == "":
                     hca_fields_to_remove["BFBver"] = True
+
+                # ---- Remove RshimDev if it has no value and the HCA is not DPU
+                if hca.get("RshimDev") == "":
+                    hca_fields_to_remove["RshimDev"] = True
 
             for field,do_remove in hca_fields_to_remove.items():
                 if field in hca and do_remove:
@@ -1571,6 +1576,7 @@ class MlnxBDFDevice(object):
         self._miscDevice = MiscCMDs(self._data_source, self._config)
         self._sasmpQueryDevice = SaSmpQueryDevice(self._data_source, self._config)
         self._lldpData = LldpData(self._data_source, self._config)
+        self._Rshim = RshimDevice(self.bdf, self._data_source, self._config)
 
     def get_data(self):
         # type: () -> None
@@ -1705,6 +1711,12 @@ class MlnxBDFDevice(object):
         self.llpd_system_name =  self._lldpData.system_name
         self.llpd_system_description = self._lldpData.system_description
         self.llpd_mgmt_addr = self._lldpData.mgmt_addr
+
+        # ------ RHSIM ------
+        if self._is_dpu() and not self._inside_dpu and \
+          (self._config.output_view == "dpu" or self._config.output_view == "all"):
+            self._Rshim.get_data()
+        self.rshim_dev = self._Rshim.rshim_dev
 
     def _is_dpu(self):
         # type: () -> bool
@@ -1906,6 +1918,7 @@ class MlnxHCA(object):
         self.driver_ver = bdf_dev._miscDevice.get_driver_ver()
         self.bfb_ver = bdf_dev._miscDevice.get_bfb_version(bdf_dev._inside_dpu)
         self.dpu_mode = bdf_dev.dpu_mode
+        self.rshim_dev = bdf_dev.rshim_dev
 
     @property
     def hca_index(self):
@@ -1945,6 +1958,7 @@ class MlnxHCA(object):
                   "Dev": self.hca_index,
                   "DPUmode": self.dpu_mode,
                   "BFBver": self.bfb_ver,
+                  "RshimDev": self.rshim_dev,
                   "bdf_devices": []}
         for bdf_dev in self.bdf_devices:
             output["bdf_devices"].append(bdf_dev.output_info())
@@ -2175,6 +2189,51 @@ class LldpData:
                 return
             else:
                 self.parse_lldp_packet(packet)
+
+
+class RshimDevice(object):
+    def __init__(self, bdf, data_source, config):
+        # type: (str, DataSource, Config) -> None
+        self._bdf = bdf
+        self._config = config
+        self._data_source = data_source
+
+        self.rshim_dev = ""
+
+    def get_data(self):
+        dev_list = self._data_source.list_dir_if_exists('/dev')
+        rshim_list = find_in_list(dev_list.split(' '),r'rshim[0-9]+',return_only_first_group=False)
+
+        if not rshim_list:
+            self._data_source.log.error('Missing /dev RSHIM devices for {}. Check if driver loaded'.format(self._bdf))
+            return
+
+        for rshim in rshim_list:
+            curr_rshim_dev = '/dev/{}'.format(rshim)
+            curr_rshim_dev_misc = '{}/misc'.format(curr_rshim_dev)
+            misc_data = self._data_source.read_file_if_exists(curr_rshim_dev_misc,use_cache=True)
+            dev_name = search_in_list_and_extract_by_regex(misc_data.split('\n'),r'DEV_NAME.*',r'DEV_NAME +(.*)')
+            if self._config.na_str in dev_name:
+                self._data_source.log.error('Failed to read {}. DEV_NAME is missing'.format(curr_rshim_dev_misc))
+                return
+
+            try:
+                bus = dev_name.split('-')[0]
+                addr = dev_name.split('-')[1]
+            except:
+                self._data_source.log.error('Failed to identify bus and address in DEV_NAME {} of {}'.format(dev_name, curr_rshim_dev_misc))
+                continue
+
+            if 'usb' in bus.lower():
+                self._data_source.log.error('RSHIM device {} connected to USB "{}", no way to identify DPU'.format(curr_rshim_dev, bus))
+                continue
+
+            # The full PCI address of rhsim interface is a pci addres of DMA device
+            # Currently DMA devices not supported by lshca
+            # so comparing only bus and device adresses (without function)
+            if addr.split('.')[0] == self._bdf.split('.')[0]:
+                self.rshim_dev = curr_rshim_dev
+                break
 
 
 class DataSource(object):
