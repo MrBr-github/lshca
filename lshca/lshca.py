@@ -63,6 +63,7 @@ class Config(object):
         self.colour_warnings_and_errors = True
         self.warning_sign = "*"
         self.error_sign = " >!<"
+        self.na_str = 'N/A'
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
