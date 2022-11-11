@@ -55,8 +55,8 @@ class Config(object):
                     "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps", "PktSeqErr"],
                     "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
                              "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
-                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "DPUmode", "BFBver", "RshimDev",
-                            "OvsBrdg", "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr", "SRIOV"]
+                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Port", "Net", "DPUmode",
+                            "BFBver", "RshimDev", "OvsBrdg", "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr", "SRIOV"]
         }
         self.output_order = self.output_order_general[self.output_view]
         self.show_warnings_and_errors = True
