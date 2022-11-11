@@ -243,6 +243,7 @@ class Config(object):
           PCI_addr  - PCI address (BDF)
           Port      - Channel Adapter (ca_port, not related to physical port). On most mlx5 devices port is 1
           RDMA      - Channel Adapter name (ca_name)
+                      inUseByVM - this device probably attached to a virtual machine, based on usage of vfio-pci driver
           LnkStat   - Port state as provided by driver. Possible values:
                                State/Physical State
                         actv - active/linkup
