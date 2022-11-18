@@ -64,6 +64,7 @@ class Config(object):
         self.warning_sign = "*"
         self.error_sign = " >!<"
         self.na_str = 'N/A'
+        self.na_str_extnd = '={}='.format(self.na_str)
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
@@ -1536,20 +1537,23 @@ class MiscCMDs(object):
 
     def get_driver_ver(self):
         # type: () -> str
-        mofed_ver = str(self.data_source.exec_shell_cmd("ofed_info -s ", use_cache=True))
+        mofed_ver = str(self.data_source.exec_shell_cmd("ofed_info -s ", use_cache=True, report_cmd_error=False))
         regex = '.*MLNX_OFED_LINUX-(.*):.*'
         mofed_ver = extract_string_by_regex(mofed_ver, regex)
         if mofed_ver != "=N/A=":
             return "mlnx_ofed-" + mofed_ver
 
-        inbox_ver = self.data_source.exec_shell_cmd("modinfo mlx5_core", use_cache=True)
+        inbox_ver = self.data_source.exec_shell_cmd("modinfo mlx5_cored", use_cache=True, report_cmd_error=False)
         regex = '^version:\s+([0-9].*)'
         search_result = find_in_list(inbox_ver, regex)
         search_result = extract_string_by_regex(search_result, regex)
-        if search_result:
+        if search_result != self.config.na_str_extnd:
             return "inbox-" + str(search_result)
         else:
-            return "N/A"
+            err_msg = 'Driver identification CMDs failed to run, probably the driver is missing\n'
+            err_msg += '\tCMDs: "ofed_info -s" and "modinfo mlx5_core"'
+            self.data_source.log.error(err_msg)
+            return self.config.na_str
 
     def get_bfb_version(self, inside_dpu):
         # type: (bool) -> str
@@ -2296,8 +2300,8 @@ class DataSource(object):
             self.tar.close()
 
 
-    def exec_shell_cmd(self, cmd, use_cache=False, splitlines=True):
-        # type: (str, bool, bool) -> list
+    def exec_shell_cmd(self, cmd, use_cache=False, splitlines=True, report_cmd_error=True):
+        # type: (str, bool, bool, bool) -> list
         timeout = 10
         cache_key = self.cmd_to_str(cmd)
 
@@ -2314,12 +2318,15 @@ class DataSource(object):
                                     executable="/bin/bash")
             output, error = process.communicate()
             if process.returncode == 124:
+                # report_cmd_error not used here because timeout is an issue that should be always reported,
+                # but missing cmd that returs an error might be acceptable
                 self.log.error('Following cmd failed due to timeout of {}s.\n\tCMD: {}'.format(timeout, cmd))
             if error:
                 if isinstance(error, bytes):
                     error = error.decode()
                 error = re.sub(r'timeout: ', '', error.strip())
-                self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
+                if report_cmd_error:
+                    self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
             if isinstance(output, bytes):
                 output = output.decode('utf8')
 
