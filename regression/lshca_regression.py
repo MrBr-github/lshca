@@ -40,7 +40,7 @@ class DataSourceRecorded(DataSource):
 
         return output, error
 
-    def exec_shell_cmd(self, cmd, use_cache=False, splitlines=True):
+    def exec_shell_cmd(self, cmd, splitlines=True, **kwargs):
         # use_cache is here for compatibility only
         output, error = self.read_cmd_output_from_file("/shell.cmd/", cmd)
         if error:
@@ -53,7 +53,7 @@ class DataSourceRecorded(DataSource):
 
         return output
 
-    def get_bdf_data_from_lspci(self, bdf, use_cache=False):
+    def get_bdf_data_from_lspci(self, bdf, **kwargs):
         # type: (str, bool) -> dict
         if version.parse(self.config.recorded_lshca_version) >= version.parse("3.9"):
             output = super(DataSourceRecorded, self).get_bdf_data_from_lspci(bdf)
@@ -62,31 +62,31 @@ class DataSourceRecorded(DataSource):
             output = self.exec_shell_cmd("lspci -vvvDnn -s" + bdf)
         return output
 
-    def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
+    def read_file_if_exists(self, file_to_read, record_suffix="", **kwargs):
         output, error = self.read_cmd_output_from_file("/os.path.exists/", file_to_read + record_suffix)
         if error:
             print(error, file=sys.stderr)
         return output
 
-    def read_link_if_exists(self, link_to_read):
+    def read_link_if_exists(self, link_to_read, **kwargs):
         output, error = self.read_cmd_output_from_file("/os.readlink/", link_to_read)
         if error:
             print(error, file=sys.stderr)
         return output
 
-    def list_dir_if_exists(self, dir_to_list):
+    def list_dir_if_exists(self, dir_to_list, **kwargs):
         output, error = self.read_cmd_output_from_file("/os.listdir/", dir_to_list.rstrip('/') + "_dir")
         if error:
             print(error, file=sys.stderr)
         return output
 
-    def exec_python_code(self, python_code, record_suffix="", use_cache=False):
+    def exec_python_code(self, python_code, record_suffix="", **kwargs):
         output, error = self.read_cmd_output_from_file("/os.python.code/", hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix)
         if error:
             print(error, file=sys.stderr)
         return output
 
-    def get_raw_socket_data(self, interface, ether_proto, capture_timeout, use_cache=True):
+    def get_raw_socket_data(self, interface, ether_proto, capture_timeout, **kwargs):
         cache_key = self.cmd_to_str(str(interface) + str(ether_proto))
         output, error = self.read_cmd_output_from_file("/raw.socket.data/", cache_key)
         if error:
