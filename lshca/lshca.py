@@ -206,10 +206,10 @@ class Config(object):
             self.show_warnings_and_errors = False
 
         if args.output_fields_filter_positive:
-            self.output_fields_filter_positive = args.output_fields_filter_positive
+            self.output_fields_filter_positive = remove_duplicates(args.output_fields_filter_positive)
 
         if args.output_fields_filter_negative:
-            self.output_fields_filter_negative = args.output_fields_filter_negative
+            self.output_fields_filter_negative = remove_duplicates(args.output_fields_filter_negative)
 
         if args.output_fields_value_filter:
             self.where_output_filter = args.output_fields_value_filter
@@ -2617,6 +2617,16 @@ def get_lshca_version():
     # used by setup.py for automatic version identification
     config = Config()
     return config.ver
+
+def remove_duplicates(orig_list):
+    # type: (list) -> list
+    # Using this function to remove duplicates without changing the order of the list
+    resulting_list = []
+    for l in orig_list:
+        if l not in resulting_list:
+            resulting_list.append(l)
+
+    return resulting_list
 
 def main():
     config = Config()
