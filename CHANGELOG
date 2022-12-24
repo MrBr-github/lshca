@@ -1,3 +1,16 @@
+Ver. 3.9
+    - Feature: Added error logging and output, this allows to understand why some of the information is missing
+               Added --log-level option
+    - Feature: Added rshim interface display in DPU view for DPUs
+               New fields: RshimDev
+    - Feature: Added notification if BDF is in use by VM
+    - Feature: Added notification if bond has multiple rdma interfaces instead of single, agregated, one
+    - Fixed bug: Fixed LLDP query on servers with Mofed 5.7+
+    - Fixed bug: Fixed fractional rate display, i.e. 2.5G
+    - Fixed bug: Show DPU interfaces and representors if ovs switch is down/missing
+    - Change: Changed bond fake BDF naming from rdma_bond<index> to rdma_<bond>
+    - Change: Added PCI address to DPU view
+    - Multiple performance improvements
 Ver. 3.8
     - Feature: Added dpu view
                New fields: DPUmode, BFBver, OvsBrdg, UplnkRepr, PfRepr, VfRepr
