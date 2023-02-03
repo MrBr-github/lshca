@@ -1055,12 +1055,11 @@ class SYSFSDevice(object):
             self.rdma = self._config.in_use_by_vm_str
             if self._config.show_warnings_and_errors is True:
                 self.rdma = self.rdma + self._config.warning_sign
-            return
         else:
             self.rdma = self._data_source.list_dir_if_exists(self._sys_prefix + "/infiniband/").rstrip()
 
         self.numa = self._data_source.read_file_if_exists(self._sys_prefix + "/numa_node").rstrip()
-        if not self.numa and not self.is_sf:
+        if not self.numa and not self.is_sf and self._config.in_use_by_vm_str not in self.rdma:
             print("Warning: " + self._bdf + " has no NUMA assignment", file=sys.stderr)
 
         net_list = self._data_source.list_dir_if_exists(self._sys_prefix + "/net/")
@@ -1174,7 +1173,7 @@ class SYSFSDevice(object):
         self.has_smi = self._data_source.read_file_if_exists(self._sys_prefix + "/infiniband/" + self.rdma +
                                                        "/ports/" + self._port + "/has_smi")
         self.has_smi = self.has_smi.rstrip()
-        if self.link_layer != "IB" or re.match('mlx4', self.rdma):
+        if ( self.link_layer != "IB" or re.match('mlx4', self.rdma) ) and (self._config.in_use_by_vm_str not in self.rdma):
             self.virt_hca = "N/A"
         elif self.has_smi == "0":
             self.virt_hca = "Virt"
