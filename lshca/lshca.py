@@ -1263,7 +1263,7 @@ class SYSFSDevice(object):
     def get_traffic(self):
         # type: () -> None
         # see https://community.mellanox.com/s/article/understanding-mlx5-linux-counters-and-status-parameters for more info about the counteres
-        if self.lnk_state == "down":
+        if self.lnk_state == "down" or self.lnk_state == "":
             return
 
         try:
@@ -1751,7 +1751,8 @@ class MlnxBDFDevice(object):
     @property
     def roce_status(self):
         # type: () -> str
-        if self.link_layer == "IB" or not ( self._config.output_view == "roce" or self._config.output_view == "all"):
+        if self.link_layer == "IB" or self._config.in_use_by_vm_str in self.rdma or \
+          not ( self._config.output_view == "roce" or self._config.output_view == "all"):
             return "N/A"
 
         lossy_status_bitmap_str = ""
