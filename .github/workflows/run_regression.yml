@@ -3,7 +3,7 @@ name: lshca-regression
 on: [push, workflow_dispatch]
 jobs:
   run-regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         python-version: [2.7, 3.6]
