@@ -65,6 +65,7 @@ class Config(object):
         self.error_sign = " >!<"
         self.na_str = 'N/A'
         self.na_str_extnd = '={}='.format(self.na_str)
+        self.in_use_by_vm_str = 'inUseByVM'
 
         self.record_data_for_debug = False
         self.record_dir = "/tmp/lshca"
@@ -431,16 +432,17 @@ class HCAManager(object):
                 if not hca_found:
                     if rdma_bond_bdf:
                         hca = MlnxHCA(rdma_bond_bdf, self._config, self._data_source)
-                        hca.get_data(bdf_dev)
-
-                        bdf_dev.rdma = ""
-                        bdf_dev.lnk_state = ""
                         hca.add_bdf_dev(bdf_dev)
                     else:
                         hca = MlnxHCA(bdf_dev,  self._config, self._data_source)
-                        hca.get_data(bdf_dev)
                     hca.hca_index = len(self.mlnxHCAs) + 1
                     self.mlnxHCAs.append(hca)
+
+                if not hca.hca_data_retrieved:
+                    hca.get_data(bdf_dev)
+                    if rdma_bond_bdf:
+                        bdf_dev.rdma = ""
+                        bdf_dev.lnk_state = ""
 
 
         # Now handle all VFs
@@ -1050,7 +1052,7 @@ class SYSFSDevice(object):
             self.sriov = "SF"
 
         if self.driver == "vfio-pci":
-            self.rdma = "inUseByVM"
+            self.rdma = self._config.in_use_by_vm_str
             if self._config.show_warnings_and_errors is True:
                 self.rdma = self.rdma + self._config.warning_sign
             return
@@ -1901,13 +1903,10 @@ class MlnxHCA(object):
         else:
             raise ValueError("MlnxHCA object can be initialised ONLY with PF bdfDev")
 
-        self.sn = bdf_dev.sn
-        self.pn = bdf_dev.pn
-        self.fw = bdf_dev.fw
-        self.psid = bdf_dev.psid
-        self.sys_image_guid = bdf_dev.sys_image_guid
-        self.description = bdf_dev.description
         self._hca_index = None
+        self.hca_data_retrieved = False
+        self.sys_image_guid = bdf_dev.sys_image_guid
+        self.sn = bdf_dev.sn
 
     def __repr__(self):
         # type: () -> str
@@ -1919,6 +1918,15 @@ class MlnxHCA(object):
     def get_data(self, bdf_dev):
         # type: (MlnxBDFDevice) -> None
         # this function retrieves information thats relevant to the whole HCA, thus reducing executiotion tim on per BDF level
+        if self.config.in_use_by_vm_str in bdf_dev.rdma:
+            return
+        else:
+            self.hca_data_retrieved = True
+
+        self.pn = bdf_dev.pn
+        self.fw = bdf_dev.fw
+        self.psid = bdf_dev.psid
+        self.description = bdf_dev.description
         self.tempr = bdf_dev._miscDevice.get_tempr(bdf_dev.rdma)
         self.driver_ver = bdf_dev._miscDevice.get_driver_ver()
         self.bfb_ver = bdf_dev._miscDevice.get_bfb_version(bdf_dev._inside_dpu)
