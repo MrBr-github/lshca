@@ -160,7 +160,7 @@ class Config(object):
         cust_user_args = []
         for arg in user_args:
             cust_user_args = [x for x in arg.split(",")]
-            
+
         args = parser.parse_args(cust_user_args)
         self.process_arguments(args)
 
@@ -393,7 +393,7 @@ class HCAManager(object):
         for bdf in mlnx_bdf_list:
             port_count = 1
 
-            while True:
+            while True and port_count < len(bdf_dev.port_list):
                 bdf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count)
                 bdf_dev.get_data()
                 mlnx_bdf_devices.append(bdf_dev)
@@ -402,10 +402,6 @@ class HCAManager(object):
                     sf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count, sf=sf)
                     sf_dev.get_data()
                     mlnx_bdf_devices.append(sf_dev)
-
-
-                if port_count >= len(bdf_dev.port_list):
-                    break
 
                 port_count += 1
 
@@ -696,27 +692,23 @@ class Output(object):
         # first pass: collect all of the maximum widths for each of the BDF fields
         hca_field_line_width = 0
         for hca in self.output:
-            for key in hca:
-                if key == "bdf_devices":
-                    for bdf_device in hca["bdf_devices"]:
-                        for bdf_key in bdf_device:
-                            if bdf_key in self.output_order:
-                                # decide what is longer the key name or it's value
-                                if len(bdf_device[bdf_key]) > len(bdf_key):
-                                    width = len(bdf_device[bdf_key])
-                                else:
-                                    width = len(bdf_key)
+            bdf_devices = [ hca[x] for x in hca if x=="bdf_devices"]
+            for bdf_device in bdf_devices:
+                for bdf_key in bdf_device:
+                    if bdf_key in self.output_order:
+                        # decide what is longer the key name or it's value
+                        width = max([len(bdf_device[bdf_key]),len(bdf_key)])
 
-                                if bdf_key not in self.column_width:
-                                    self.column_width[bdf_key] = width
+                        if bdf_key not in self.column_width:
+                            self.column_width[bdf_key] = width
 
-                                if width > self.column_width[bdf_key]:
-                                    self.column_width[bdf_key] = width
+                        if width > self.column_width[bdf_key]:
+                            self.column_width[bdf_key] = width
 
         # second pass: calculate width of BDF and HCA lines
         for hca in self.output:
             curr_hca_column_width = {}
-            bdf_devices = [key for key in hca if key == "bdf_devices"]
+            bdf_devices = [hca[key] for key in hca if key == "bdf_devices"]
             for key in hca:
                 if key == "bdf_devices":
                     for bdf_device in hca["bdf_devices"]:
