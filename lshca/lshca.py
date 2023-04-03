@@ -500,12 +500,15 @@ class Output(object):
 
     def append(self, data):
         self.output.append(data)
+    
+    def __add__(self,data):
+        self.output.append(data)
 
     def apply_select_output_filters(self):
         # type: () -> None
-        if len(self.config.output_fields_filter_positive) > 0:
+        if self.config.output_fields_filter_positive:
             self.output_order = self.config.output_fields_filter_positive
-        elif len(self.config.output_fields_filter_negative) > 0:
+        elif self.config.output_fields_filter_negative:
             decrement_list = self.output_order
 
             output_filter = self.config.output_fields_filter_negative
@@ -516,7 +519,7 @@ class Output(object):
             self.output_order = decrement_list
 
         data_keys_remove_list = []
-        if len(self.output) > 0:
+        if self.output:
             output_data_keys = list(self.output[0]) + list(self.output[0]["bdf_devices"][0])
             data_keys_remove_list = list(set(output_data_keys) - set(self.output_order))
 
@@ -779,11 +782,9 @@ class Output(object):
         # type: (dict) -> None
         order_dict = {}
 
-        position = 0
-        for key in self.output_order:
+        for idx, key in enumerate(self.output_order):
             if key in args:
-                order_dict[key] = position
-                position += 1
+                order_dict[key] = idx
 
         output_list = [""] * len(order_dict)
         for key in args:
