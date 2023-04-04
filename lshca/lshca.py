@@ -37,59 +37,57 @@ except ImportError:
 
 
 class Config(object):
-    log_level = "" # set by argparse
-
-    output_view = "system"
-    output_order_general = {
-                "system": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
-                            "IpStat", "Link", "Rate", "SRIOV", "Parent_addr", "Tempr", "LnkCapWidth", "LnkStaWidth",
-                            "HCA_Type", "Bond", "BondState", "BondMiiStat"],
-                "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
-                        "VrtHCA", "PLid", "PGuid", "IbNetPref"],
-                "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
-                            "IpStat", "RoCEstat"],
-                "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
-                            "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
-                "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps", "PktSeqErr"],
-                "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
-                            "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
-                "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Port", "Net", "DPUmode",
-                        "BFBver", "RshimDev", "OvsBrdg", "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr", "SRIOV"]
-    }
-    output_order = output_order_general[output_view]
-    show_warnings_and_errors = True
-    colour_warnings_and_errors = True
-    warning_sign = "*"
-    error_sign = " >!<"
-    na_str = 'N/A'
-    na_str_extnd = '={}='.format(na_str)
-    in_use_by_vm_str = 'inUseByVM'
-
-    record_data_for_debug = False
-    record_dir = "/tmp/lshca"
-    record_tar_file = None
-
-    ver = "3.9"
-
-    output_format = "human_readable"
-    output_format_elastic = None
-    output_separator_char = "-"
-    output_fields_filter_positive = ""
-    output_fields_filter_negative = ""
-    where_output_filter = ""
-
-    # based on https://community.mellanox.com/s/article/lossless-roce-configuration-for-linux-drivers-in-dscp-based-qos-mode
-    lossless_roce_expected_trust = "dscp"
-    lossless_roce_expected_pfc = "00010000"
-    lossless_roce_expected_gtclass = "Global tclass=106"
-    lossless_roce_expected_tcp_ecn = "1"
-    lossless_roce_expected_rdma_cm_tos = "106"
-
-    # based on https://docs.mellanox.com/pages/viewpage.action?pageId=43714202#LinkLayerDiscoveryProtocol(LLDP)-lldptimer
-    lldp_capture_timeout = 35 # seconds. Based on default 30s value in Mellanox Onyx OS
-    
     def __init__(self):
-        pass
+        # type: () -> None
+        self.log_level = "" # set by argparse
+
+        self.output_view = "system"
+        self.output_order_general = {
+                    "system": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                               "IpStat", "Link", "Rate", "SRIOV", "Parent_addr", "Tempr", "LnkCapWidth", "LnkStaWidth",
+                               "HCA_Type", "Bond", "BondState", "BondMiiStat"],
+                    "ib": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Port", "Net", "Numa", "LnkStat", "IpStat",
+                           "VrtHCA", "PLid", "PGuid", "IbNetPref"],
+                    "roce": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                             "IpStat", "RoCEstat"],
+                    "cable": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "MST_device",  "CblPN", "CblSN", "CblLng",
+                              "PhyLinkStat", "PhyLnkSpd", "PhyAnalisys"],
+                    "traffic": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "RDMA", "Net", "TX_bps", "RX_bps", "PktSeqErr"],
+                    "lldp": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Net", "Port", "Numa", "LnkStat",
+                             "IpStat", "LLDPportId", "LLDPsysName", "LLDPmgmtAddr", "LLDPsysDescr"],
+                    "dpu": ["Dev", "Desc", "PN", "PSID", "SN", "FW", "Driver", "PCI_addr", "RDMA", "Port", "Net", "DPUmode",
+                            "BFBver", "RshimDev", "OvsBrdg", "LnkStat", "IpStat", "UplnkRepr", "PfRepr", "VfRepr", "SRIOV"]
+        }
+        self.output_order = self.output_order_general[self.output_view]
+        self.show_warnings_and_errors = True
+        self.colour_warnings_and_errors = True
+        self.warning_sign = "*"
+        self.error_sign = " >!<"
+        self.na_str = 'N/A'
+        self.na_str_extnd = '={}='.format(self.na_str)
+        self.in_use_by_vm_str = 'inUseByVM'
+
+        self.record_data_for_debug = False
+        self.record_dir = "/tmp/lshca"
+        self.record_tar_file = None
+
+        self.ver = "3.9"
+
+        self.output_format = "human_readable"
+        self.output_format_elastic = None
+        self.output_separator_char = "-"
+        self.output_fields_filter_positive = ""
+        self.output_fields_filter_negative = ""
+        self.where_output_filter = ""
+
+        # based on https://community.mellanox.com/s/article/lossless-roce-configuration-for-linux-drivers-in-dscp-based-qos-mode
+        self.lossless_roce_expected_trust = "dscp"
+        self.lossless_roce_expected_pfc = "00010000"
+        self.lossless_roce_expected_gtclass = "Global tclass=106"
+        self.lossless_roce_expected_tcp_ecn = "1"
+        self.lossless_roce_expected_rdma_cm_tos = "106"
+
+        # based on https://docs.mellanox.com/pages/viewpage.action?pageId=43714202#LinkLayerDiscoveryProtocol(LLDP)-lldptimer
 
     def parse_arguments(self, user_args):
         # type: (list) -> None
@@ -496,9 +494,6 @@ class Output(object):
     def append(self, data):
         self.output.append(data)
     
-    def __add__(self,data):
-        self.output.append(data)
-
     def apply_select_output_filters(self):
         # type: () -> None
         if self.config.output_fields_filter_positive:
@@ -692,7 +687,7 @@ class Output(object):
         # first pass: collect all of the maximum widths for each of the BDF fields
         hca_field_line_width = 0
         for hca in self.output:
-            bdf_devices = [ hca[x] for x in hca if x=="bdf_devices"]
+            bdf_devices = [hca[x] for x in hca if x=="bdf_devices"]
             for bdf_device in bdf_devices:
                 for bdf_key in bdf_device:
                     if bdf_key in self.output_order:
@@ -708,7 +703,6 @@ class Output(object):
         # second pass: calculate width of BDF and HCA lines
         for hca in self.output:
             curr_hca_column_width = {}
-            bdf_devices = [hca[key] for key in hca if key == "bdf_devices"]
             for key in hca:
                 if key == "bdf_devices":
                     for bdf_device in hca["bdf_devices"]:
