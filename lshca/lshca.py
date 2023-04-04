@@ -89,7 +89,7 @@ class Config(object):
 
         # based on https://docs.mellanox.com/pages/viewpage.action?pageId=43714202#LinkLayerDiscoveryProtocol(LLDP)-lldptimer
         self.lldp_capture_timeout = 35 # seconds. Based on default 30s value in Mellanox Onyx OS
-        
+
     def parse_arguments(self, user_args):
         # type: (list) -> None
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
@@ -401,6 +401,9 @@ class HCAManager(object):
                     sf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count, sf=sf)
                     sf_dev.get_data()
                     mlnx_bdf_devices.append(sf_dev)
+
+                if port_count >= len(bdf_dev.port_list):
+                    break
 
                 port_count += 1
 
