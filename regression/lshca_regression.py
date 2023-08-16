@@ -1,20 +1,30 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import sys
-import os
-import tempfile
-import shutil
+
+import argparse
 import difflib
+import hashlib
+import os
+import pickle
+import re
+import shutil
+import sys
+import tarfile
+import tempfile
+import textwrap
 import traceback
+from io import StringIO
+
 from packaging import version
 
 regr_home = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(regr_home + '/../')
 
-from lshca import *
+import lshca
 
-class DataSourceRecorded(DataSource):
+
+class DataSourceRecorded(lshca.DataSource):
     def read_cmd_output_from_file(self, cmd_prefix, cmd):
         output_file_to_read = self.config.record_dir + cmd_prefix + cmd
         try:
@@ -105,7 +115,7 @@ class BColors:
     UNDERLINE = '\033[4m'
 
 
-class RegressionConfig(Config):
+class RegressionConfig(lshca.Config):
     def __init__(self):
         self.skip_missing = False
         self.recorded_lshca_version = "0"
@@ -122,7 +132,7 @@ def main(tmp_dir_name, recorder_sys_argv, regression_conf):
     config.record_dir = tmp_dir_name
     data_source = DataSourceRecorded(config)
 
-    hca_manager = HCAManager(data_source, config)
+    hca_manager = lshca.HCAManager(data_source, config)
     hca_manager.get_data()
 
     hca_manager.display_hcas_info()
