@@ -256,25 +256,8 @@ def regression():
         print("Command: " + " ".join(recorded_sys_args))
         print('**************************************************************************************')
 
-        try:
-            f = open(untared_data_source_dir + "/output", "rb")
-            saved_output = pickle.load(f)
-        except ValueError as e:
-            print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
-            raise e
-
-        # recording of errors started from version 3.9
-        # this comes to handle recordings with missing errors
-        saved_errors = None
-        if os.path.exists(untared_data_source_dir + "/errors"):
-            try:
-                f = open(untared_data_source_dir + "/errors", "rb")
-                saved_errors = pickle.load(f)
-            except ValueError as e:
-                print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
-                raise e
-        else:
-            print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
+        saved_output = load_saved_output(recorded_data_file, untared_data_source_dir)
+        saved_errors = load_saved_errors(recorded_data_file, untared_data_source_dir)
 
         print(regression_conf.output_separator_char)
         test_errors = lshca_errors.getvalue()
@@ -293,6 +276,30 @@ def regression():
 
     if not regression_run_succseeded:
         sys.exit(1)
+
+def load_saved_errors(recorded_data_file, untared_data_source_dir):
+    # recording of errors started from version 3.9
+    # this comes to handle recordings with missing errors
+    saved_errors = None
+    if os.path.exists(untared_data_source_dir + "/errors"):
+        try:
+            f = open(untared_data_source_dir + "/errors", "rb")
+            saved_errors = pickle.load(f)
+        except ValueError as e:
+            print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+            raise e
+    else:
+        print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
+    return saved_errors
+
+def load_saved_output(recorded_data_file, untared_data_source_dir):
+    try:
+        f = open(untared_data_source_dir + "/output", "rb")
+        saved_output = pickle.load(f)
+    except ValueError as e:
+        print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+        raise e
+    return saved_output
 
 def do_compare(args, saved_errors, saved_output, test_errors, test_output):
     passed = True
