@@ -256,9 +256,6 @@ def regression():
         print("Command: " + " ".join(recorded_sys_args))
         print('**************************************************************************************')
 
-        test_output = lshca_output.getvalue()
-        test_errors = lshca_errors.getvalue()
-
         try:
             f = open(untared_data_source_dir + "/output", "rb")
             saved_output = pickle.load(f)
@@ -266,49 +263,13 @@ def regression():
             print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
             raise e
 
-        # recording of errors started from version 3.9
-        # this comes to handle recordings with missing errors
-        saved_errors = None
-        if os.path.exists(untared_data_source_dir + "/errors"):
-            try:
-                f = open(untared_data_source_dir + "/errors", "rb")
-                saved_errors = pickle.load(f)
-            except ValueError as e:
-                print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
-                raise e
-        else:
-            print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
-
         print(regression_conf.output_separator_char)
-        test_output = re.sub(regression_conf.output_separator_char, '', test_output)
+        test_errors = lshca_errors.getvalue()
+        test_output = re.sub(regression_conf.output_separator_char, '', lshca_output.getvalue())
         saved_output = re.sub(regression_conf.output_separator_char, '', saved_output)
 
-        outs_equal = test_output == saved_output
-        errs_equal = test_errors == saved_errors if saved_errors else True
-        if outs_equal and errs_equal:
-            print("Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC)
-            if args.verbose:
-                print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
-                print(test_errors)
-                print(test_output)
-        else:
+        if not do_compare(args, recorded_data_file, untared_data_source_dir, saved_output, test_errors, test_output):
             regression_run_succseeded = False
-            print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + \
-                    " Saved and regression outputs/errors differ\n")
-
-            if not args.display_only:
-                d = difflib.Differ()
-                if saved_errors:
-                    diff = d.compare(saved_errors.split("\n"), test_errors.split("\n"))
-                    print('\n'.join(diff))
-                diff = d.compare(saved_output.split("\n"), test_output.split("\n"))
-                print('\n'.join(diff))
-            elif args.display_only == "orig":
-                print(saved_errors)
-                print(saved_output)
-            elif args.display_only == "curr":
-                print(test_errors)
-                print(test_output)
         print("\n")
 
     if not args.keep_recorded_ds:
@@ -318,6 +279,49 @@ def regression():
 
     if not regression_run_succseeded:
         sys.exit(1)
+
+def do_compare(args, recorded_data_file, untared_data_source_dir, saved_output, test_errors, test_output):
+    # recording of errors started from version 3.9
+    # this comes to handle recordings with missing errors
+    passed = True
+    saved_errors = None
+    if os.path.exists(untared_data_source_dir + "/errors"):
+        try:
+            f = open(untared_data_source_dir + "/errors", "rb")
+            saved_errors = pickle.load(f)
+        except ValueError as e:
+            print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+            raise e
+    else:
+        print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
+
+    outs_equal = test_output == saved_output
+    errs_equal = test_errors == saved_errors if saved_errors else True
+    if outs_equal and errs_equal:
+        print("Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC)
+        if args.verbose:
+            print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
+            print(test_errors)
+            print(test_output)
+    else:
+        passed = False
+        print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + \
+                    " Saved and regression outputs/errors differ\n")
+
+        if not args.display_only:
+            d = difflib.Differ()
+            if saved_errors:
+                diff = d.compare(saved_errors.split("\n"), test_errors.split("\n"))
+                print('\n'.join(diff))
+            diff = d.compare(saved_output.split("\n"), test_output.split("\n"))
+            print('\n'.join(diff))
+        elif args.display_only == "orig":
+            print(saved_errors)
+            print(saved_output)
+        elif args.display_only == "curr":
+            print(test_errors)
+            print(test_output)
+    return passed
 
 
 if __name__ == "__main__":
