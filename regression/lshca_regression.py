@@ -153,7 +153,6 @@ def regression():
                                   orig - original data
                                   curr - current data
                                 '''))
-    parser.add_argument('--remove-separators', action='store_true', help="Don't show and compare separators")
     parser.add_argument('--display-recorded-fields', action='store_true', help="Display ONLY originaly recorded fields. Overwrites -p")
     parser.add_argument('--data-source', nargs="+", help="Select single data souce from recorded_data directory")
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
@@ -302,10 +301,9 @@ def regression():
                 print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
                 saved_errors_file_exists = False
 
-            if args.remove_separators:
-                print(regression_conf.output_separator_char)
-                test_output = re.sub(regression_conf.output_separator_char, '', test_output)
-                saved_output = re.sub(regression_conf.output_separator_char, '', saved_output)
+            print(regression_conf.output_separator_char)
+            test_output = re.sub(regression_conf.output_separator_char, '', test_output)
+            saved_output = re.sub(regression_conf.output_separator_char, '', saved_output)
 
             if test_output != saved_output or ( test_errors != saved_errors and saved_errors_file_exists):
                 regression_run_succseeded = False
