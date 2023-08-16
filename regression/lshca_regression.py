@@ -263,13 +263,27 @@ def regression():
             print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
             raise e
 
+        # recording of errors started from version 3.9
+        # this comes to handle recordings with missing errors
+        saved_errors = None
+        if os.path.exists(untared_data_source_dir + "/errors"):
+            try:
+                f = open(untared_data_source_dir + "/errors", "rb")
+                saved_errors = pickle.load(f)
+            except ValueError as e:
+                print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+                raise e
+        else:
+            print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
+
         print(regression_conf.output_separator_char)
         test_errors = lshca_errors.getvalue()
         test_output = re.sub(regression_conf.output_separator_char, '', lshca_output.getvalue())
         saved_output = re.sub(regression_conf.output_separator_char, '', saved_output)
 
-        if not do_compare(args, recorded_data_file, untared_data_source_dir, saved_output, test_errors, test_output):
+        if not do_compare(args, saved_errors, saved_output, test_errors, test_output):
             regression_run_succseeded = False
+
         print("\n")
 
     if not args.keep_recorded_ds:
@@ -280,20 +294,8 @@ def regression():
     if not regression_run_succseeded:
         sys.exit(1)
 
-def do_compare(args, recorded_data_file, untared_data_source_dir, saved_output, test_errors, test_output):
-    # recording of errors started from version 3.9
-    # this comes to handle recordings with missing errors
+def do_compare(args, saved_errors, saved_output, test_errors, test_output):
     passed = True
-    saved_errors = None
-    if os.path.exists(untared_data_source_dir + "/errors"):
-        try:
-            f = open(untared_data_source_dir + "/errors", "rb")
-            saved_errors = pickle.load(f)
-        except ValueError as e:
-            print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
-            raise e
-    else:
-        print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
 
     outs_equal = test_output == saved_output
     errs_equal = test_errors == saved_errors if saved_errors else True
