@@ -139,7 +139,6 @@ def main(tmp_dir_name, recorder_sys_argv, regression_conf):
 
 
 def regression():
-
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
     parser.add_argument('--skip-missing', action='store_true', dest="skip_missing",
@@ -238,25 +237,16 @@ def regression():
                 recorded_lshca_version = item.split(" ")[1]
                 break
 
-        stdout = StringIO()
-        sys.stdout = stdout
+        lshca_output, lshca_errors = StringIO(), StringIO()
+        sys.stdout, sys.stderr = lshca_output, lshca_errors
 
-        stderr = StringIO()
-        sys.stderr = stderr
-
-        trace_back = ""
-        lshca_output = None
-        lshca_errors = None
         try:
             regression_conf = RegressionConfig()
             regression_conf.skip_missing = args.skip_missing
             regression_conf.recorded_lshca_version = recorded_lshca_version
             main(untared_data_source_dir, recorded_sys_args, regression_conf)
-            lshca_output = stdout
-            lshca_errors = stderr
-        except BaseException as e:
-            lshca_output = e
-            trace_back = traceback.format_exc()
+        except Exception as e:
+            lshca_output = StringIO(str(e))
         finally:
             sys.stdout = sys.__stdout__
             sys.stderr = sys.__stderr__
@@ -265,22 +255,9 @@ def regression():
         print(BColors.BOLD + 'Recorded data file: ' + str(full_recorded_data_file) + BColors.ENDC)
         print("Command: " + " ".join(recorded_sys_args))
         print('**************************************************************************************')
-        try:
-            test_output = lshca_output.getvalue()
-            test_errors = lshca_errors.getvalue()
-        except AttributeError:
-            regression_run_succseeded = False
-            print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + "\n")
-            print(recorded_sys_args)
-            print("==>  Traceback   <==")
-            print(trace_back)
-            print("==>   Error   <==")
-            print("STDERR:")
-            print(lshca_errors)
-            print("STDOUT:")
-            print(lshca_output)
 
-            continue
+        test_output = lshca_output.getvalue()
+        test_errors = lshca_errors.getvalue()
 
         try:
             f = open(untared_data_source_dir + "/output", "rb")
@@ -321,8 +298,9 @@ def regression():
 
             if not args.display_only:
                 d = difflib.Differ()
-                diff = d.compare(saved_errors.split("\n"), test_errors.split("\n"))
-                print('\n'.join(diff))
+                if saved_errors:
+                    diff = d.compare(saved_errors.split("\n"), test_errors.split("\n"))
+                    print('\n'.join(diff))
                 diff = d.compare(saved_output.split("\n"), test_output.split("\n"))
                 print('\n'.join(diff))
             elif args.display_only == "orig":
