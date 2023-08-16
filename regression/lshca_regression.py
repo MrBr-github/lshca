@@ -291,8 +291,7 @@ def regression():
 
         # recording of errors started from version 3.9
         # this comes to handle recordings with missing errors
-        saved_errors = ""
-        saved_errors_file_exists = True
+        saved_errors = None
         if os.path.exists(untared_data_source_dir + "/errors"):
             try:
                 f = open(untared_data_source_dir + "/errors", "rb")
@@ -302,13 +301,20 @@ def regression():
                 raise e
         else:
             print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
-            saved_errors_file_exists = False
 
         print(regression_conf.output_separator_char)
         test_output = re.sub(regression_conf.output_separator_char, '', test_output)
         saved_output = re.sub(regression_conf.output_separator_char, '', saved_output)
 
-        if test_output != saved_output or ( test_errors != saved_errors and saved_errors_file_exists):
+        outs_equal = test_output == saved_output
+        errs_equal = test_errors == saved_errors if saved_errors else True
+        if outs_equal and errs_equal:
+            print("Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC)
+            if args.verbose:
+                print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
+                print(test_errors)
+                print(test_output)
+        else:
             regression_run_succseeded = False
             print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + \
                     " Saved and regression outputs/errors differ\n")
@@ -323,12 +329,6 @@ def regression():
                 print(saved_errors)
                 print(saved_output)
             elif args.display_only == "curr":
-                print(test_errors)
-                print(test_output)
-        else:
-            print("Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC)
-            if args.verbose:
-                print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
                 print(test_errors)
                 print(test_output)
         print("\n")
