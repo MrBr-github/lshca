@@ -1,20 +1,30 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import sys
-import os
-import tempfile
-import shutil
+
+import argparse
 import difflib
+import hashlib
+import os
+import pickle
+import re
+import shutil
+import sys
+import tarfile
+import tempfile
+import textwrap
 import traceback
+from io import StringIO
+
 from packaging import version
 
 regr_home = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(regr_home + '/../')
 
-from lshca import *
+import lshca
 
-class DataSourceRecorded(DataSource):
+
+class DataSourceRecorded(lshca.DataSource):
     def read_cmd_output_from_file(self, cmd_prefix, cmd):
         output_file_to_read = self.config.record_dir + cmd_prefix + cmd
         try:
@@ -105,7 +115,7 @@ class BColors:
     UNDERLINE = '\033[4m'
 
 
-class RegressionConfig(Config):
+class RegressionConfig(lshca.Config):
     def __init__(self):
         self.skip_missing = False
         self.recorded_lshca_version = "0"
@@ -122,15 +132,13 @@ def main(tmp_dir_name, recorder_sys_argv, regression_conf):
     config.record_dir = tmp_dir_name
     data_source = DataSourceRecorded(config)
 
-    hca_manager = HCAManager(data_source, config)
+    hca_manager = lshca.HCAManager(data_source, config)
     hca_manager.get_data()
 
     hca_manager.display_hcas_info()
 
 
 def regression():
-    rec_data_dir_path = os.path.dirname(os.path.abspath(__file__)) + "/../recorded_data/"
-
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', action='store_true', dest="verbose", help="set high verbosity")
     parser.add_argument('--skip-missing', action='store_true', dest="skip_missing",
@@ -143,7 +151,6 @@ def regression():
                                   orig - original data
                                   curr - current data
                                 '''))
-    parser.add_argument('--remove-separators', action='store_true', help="Don't show and compare separators")
     parser.add_argument('--display-recorded-fields', action='store_true', help="Display ONLY originaly recorded fields. Overwrites -p")
     parser.add_argument('--data-source', nargs="+", help="Select single data souce from recorded_data directory")
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
@@ -160,6 +167,7 @@ def regression():
             cust_user_args.append(member)
     args = parser.parse_args(cust_user_args)
 
+    rec_data_dir_path = os.path.dirname(os.path.abspath(__file__)) + "/../recorded_data/"
     if args.data_source:
         if os.path.isfile(rec_data_dir_path + str(args.data_source[0])):
             recorded_data_files_list = [str(args.data_source[0])]
@@ -177,158 +185,152 @@ def regression():
         for file in file_list:
             if file.endswith('.tar'):
                 recorded_data_files_list.append(file)
+
+    if not recorded_data_files_list:
+        print("WARNING: no test cases ran")
+        sys.exit(0)
+
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
+    for full_recorded_data_file in recorded_data_files_list:
+        if not os.path.isfile(rec_data_dir_path + full_recorded_data_file):
+            continue
 
-    if len(recorded_data_files_list) != 0:
-        for full_recorded_data_file in recorded_data_files_list:
-            if not os.path.isfile(rec_data_dir_path + full_recorded_data_file):
-                continue
+        recorded_data_file = full_recorded_data_file.split('/')[-1]
+        recorded_data_file_prefix = full_recorded_data_file.replace(recorded_data_file, '')
+        shutil.copyfile(
+            os.path.join(rec_data_dir_path, recorded_data_file_prefix, recorded_data_file),
+            os.path.join(tmp_dir_name, recorded_data_file)
+            )
+        untared_data_source_dir = tmp_dir_name + "/" + recorded_data_file.replace(".tar", "")
+        os.mkdir(untared_data_source_dir)
 
-            recorded_data_file = full_recorded_data_file.split('/')[-1]
-            recorded_data_file_prefix = full_recorded_data_file.replace(recorded_data_file, '')
-            shutil.copyfile(
-                os.path.join(rec_data_dir_path, recorded_data_file_prefix, recorded_data_file),
-                os.path.join(tmp_dir_name, recorded_data_file)
-                )
-            untared_data_source_dir = tmp_dir_name + "/" + recorded_data_file.replace(".tar", "")
-            os.mkdir(untared_data_source_dir)
+        tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
+        tar.extractall(path=untared_data_source_dir)
 
-            tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
-            tar.extractall(path=untared_data_source_dir)
-
-            if args.parameters:
-                recorded_sys_args = args.parameters[0].split(" ")
-                recorded_sys_args.insert(0, "lshca_run_by_regression")
-            else:
-                f = open(untared_data_source_dir + "/cmd", "rb")
-                try:
-                    recorded_sys_args = pickle.load(f)
-                except ValueError as e:
-                    print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
-                    raise e
-
-                recorded_sys_args = recorded_sys_args.split(" ")
-                if args.display_recorded_fields:
-                    try:
-                        f = open(untared_data_source_dir + "/output_fields", "rb")
-                        recorded_output_fields = pickle.load(f)
-                    except:
-                        print(BColors.FAIL + "Error: No output fileds saved in "  + recorded_data_file + BColors.ENDC )
-                        sys.exit(1)
-                    recorded_sys_args.append("-o")
-                    recorded_sys_args.append(",".join(recorded_output_fields))
-
-            f = open(untared_data_source_dir + "/environment", "rb")
-            tmp = pickle.load(f)
-            for item in tmp:
-                if 'LSHCA:' in item:
-                    recorded_lshca_version = item.split(" ")[1]
-                    break
-
-            stdout = StringIO()
-            sys.stdout = stdout
-
-            stderr = StringIO()
-            sys.stderr = stderr
-
-            trace_back = ""
-            lshca_output = None
-            lshca_errors = None
+        if args.parameters:
+            recorded_sys_args = args.parameters[0].split(" ")
+            recorded_sys_args.insert(0, "lshca_run_by_regression")
+        else:
+            f = open(untared_data_source_dir + "/cmd", "rb")
             try:
-                regression_conf = RegressionConfig()
-                regression_conf.skip_missing = args.skip_missing
-                regression_conf.recorded_lshca_version = recorded_lshca_version
-                main(untared_data_source_dir, recorded_sys_args, regression_conf)
-                lshca_output = stdout
-                lshca_errors = stderr
-            except BaseException as e:
-                lshca_output = e
-                trace_back = traceback.format_exc()
-            finally:
-                sys.stdout = sys.__stdout__
-                sys.stderr = sys.__stderr__
-
-            print('**************************************************************************************')
-            print(BColors.BOLD + 'Recorded data file: ' + str(full_recorded_data_file) + BColors.ENDC)
-            print("Command: " + " ".join(recorded_sys_args))
-            print('**************************************************************************************')
-            try:
-                test_output = lshca_output.getvalue()
-                test_errors = lshca_errors.getvalue()
-            except AttributeError:
-                regression_run_succseeded = False
-                print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + "\n")
-                print(recorded_sys_args)
-                print("==>  Traceback   <==")
-                print(trace_back)
-                print("==>   Error   <==")
-                print("STDERR:")
-                print(lshca_errors)
-                print("STDOUT:")
-                print(lshca_output)
-
-                continue
-
-            try:
-                f = open(untared_data_source_dir + "/output", "rb")
-                saved_output = pickle.load(f)
+                recorded_sys_args = pickle.load(f)
             except ValueError as e:
                 print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
                 raise e
 
-            # recording of errors started from version 3.9
-            # this comes to handle recordings with missing errors
-            saved_errors = ""
-            saved_errors_file_exists = True
-            if os.path.exists(untared_data_source_dir + "/errors"):
+            recorded_sys_args = recorded_sys_args.split(" ")
+            if args.display_recorded_fields:
                 try:
-                    f = open(untared_data_source_dir + "/errors", "rb")
-                    saved_errors = pickle.load(f)
-                except ValueError as e:
-                    print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
-                    raise e
-            else:
-                print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
-                saved_errors_file_exists = False
+                    f = open(untared_data_source_dir + "/output_fields", "rb")
+                    recorded_output_fields = pickle.load(f)
+                except:
+                    print(BColors.FAIL + "Error: No output fileds saved in "  + recorded_data_file + BColors.ENDC )
+                    sys.exit(1)
+                recorded_sys_args.append("-o")
+                recorded_sys_args.append(",".join(recorded_output_fields))
 
-            if args.remove_separators:
-                print(regression_conf.output_separator_char)
-                test_output = re.sub(regression_conf.output_separator_char, '', test_output)
-                saved_output = re.sub(regression_conf.output_separator_char, '', saved_output)
+        f = open(untared_data_source_dir + "/environment", "rb")
+        tmp = pickle.load(f)
+        for item in tmp:
+            if 'LSHCA:' in item:
+                recorded_lshca_version = item.split(" ")[1]
+                break
 
-            if test_output != saved_output or ( test_errors != saved_errors and saved_errors_file_exists):
-                regression_run_succseeded = False
-                print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + \
-                      " Saved and regression outputs/errors differ\n")
+        lshca_output, lshca_errors = StringIO(), StringIO()
+        sys.stdout, sys.stderr = lshca_output, lshca_errors
 
-                if not args.display_only:
-                    d = difflib.Differ()
-                    diff = d.compare(saved_errors.split("\n"), test_errors.split("\n"))
-                    print('\n'.join(diff))
-                    diff = d.compare(saved_output.split("\n"), test_output.split("\n"))
-                    print('\n'.join(diff))
-                elif args.display_only == "orig":
-                    print(saved_errors)
-                    print(saved_output)
-                elif args.display_only == "curr":
-                    print(test_errors)
-                    print(test_output)
-            else:
-                print("Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC)
-                if args.verbose:
-                    print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
-                    print(test_errors)
-                    print(test_output)
-            print("\n")
+        try:
+            regression_conf = RegressionConfig()
+            regression_conf.skip_missing = args.skip_missing
+            regression_conf.recorded_lshca_version = recorded_lshca_version
+            main(untared_data_source_dir, recorded_sys_args, regression_conf)
+        except Exception as e:
+            lshca_output = StringIO(str(e))
+        finally:
+            sys.stdout = sys.__stdout__
+            sys.stderr = sys.__stderr__
 
-        if not args.keep_recorded_ds:
-            shutil.rmtree(tmp_dir_name)
-        else:
-            print("Data sources left in {} directory".format(tmp_dir_name))
+        print('**************************************************************************************')
+        print(BColors.BOLD + 'Recorded data file: ' + str(full_recorded_data_file) + BColors.ENDC)
+        print("Command: " + " ".join(recorded_sys_args))
+        print('**************************************************************************************')
 
-        if not regression_run_succseeded:
-            sys.exit(1)
+        saved_output = load_saved_output(recorded_data_file, untared_data_source_dir)
+        saved_errors = load_saved_errors(recorded_data_file, untared_data_source_dir)
+
+        print(regression_conf.output_separator_char)
+        test_errors = lshca_errors.getvalue()
+        test_output = re.sub(regression_conf.output_separator_char, '', lshca_output.getvalue())
+        saved_output = re.sub(regression_conf.output_separator_char, '', saved_output)
+
+        if not do_compare(args, saved_errors, saved_output, test_errors, test_output):
+            regression_run_succseeded = False
+
+        print("\n")
+
+    if not args.keep_recorded_ds:
+        shutil.rmtree(tmp_dir_name)
+    else:
+        print("Data sources left in {} directory".format(tmp_dir_name))
+
+    if not regression_run_succseeded:
+        sys.exit(1)
+
+def load_saved_errors(recorded_data_file, untared_data_source_dir):
+    # recording of errors started from version 3.9
+    # this comes to handle recordings with missing errors
+    saved_errors = None
+    if os.path.exists(untared_data_source_dir + "/errors"):
+        try:
+            f = open(untared_data_source_dir + "/errors", "rb")
+            saved_errors = pickle.load(f)
+        except ValueError as e:
+            print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+            raise e
+    else:
+        print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
+    return saved_errors
+
+def load_saved_output(recorded_data_file, untared_data_source_dir):
+    try:
+        f = open(untared_data_source_dir + "/output", "rb")
+        saved_output = pickle.load(f)
+    except ValueError as e:
+        print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+        raise e
+    return saved_output
+
+def do_compare(args, saved_errors, saved_output, test_errors, test_output):
+    passed = True
+
+    outs_equal = test_output == saved_output
+    errs_equal = test_errors == saved_errors if saved_errors else True
+    if outs_equal and errs_equal:
+        print("Regression run " + BColors.OKGREEN + "PASSED." + BColors.ENDC)
+        if args.verbose:
+            print(BColors.OKBLUE + "Test output below:" + BColors.ENDC)
+            print(test_errors)
+            print(test_output)
+    else:
+        passed = False
+        print("Regression run " + BColors.FAIL + "FAILED." + BColors.ENDC + \
+                    " Saved and regression outputs/errors differ\n")
+
+        if not args.display_only:
+            d = difflib.Differ()
+            if saved_errors:
+                diff = d.compare(saved_errors.split("\n"), test_errors.split("\n"))
+                print('\n'.join(diff))
+            diff = d.compare(saved_output.split("\n"), test_output.split("\n"))
+            print('\n'.join(diff))
+        elif args.display_only == "orig":
+            print(saved_errors)
+            print(saved_output)
+        elif args.display_only == "curr":
+            print(test_errors)
+            print(test_output)
+    return passed
 
 
 if __name__ == "__main__":
