@@ -176,9 +176,6 @@ def regression():
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
     for full_recorded_data_file in recorded_data_files_list:
-        if not full_recorded_data_file.exists():
-            continue
-
         shutil.copyfile(
             str(full_recorded_data_file),
             str(Path(tmp_dir_name) / full_recorded_data_file.name)
