@@ -153,6 +153,7 @@ def regression():
                                   curr - current data
                                 '''))
     parser.add_argument('--display-recorded-fields', action='store_true', help="Display ONLY originaly recorded fields. Overwrites -p")
+    parser.add_argument('--data-source', help="Select single data souce from recorded_data directory")
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
                         help=textwrap.dedent('''\
                                 override saved parameters and pass new ones
@@ -167,7 +168,7 @@ def regression():
             cust_user_args.append(member)
     args = parser.parse_args(cust_user_args)
 
-    recorded_data_files_list = load_case_files()
+    recorded_data_files_list = load_case_files(args.data_source)
 
     if not recorded_data_files_list:
         print("WARNING: no test cases ran")
@@ -252,11 +253,16 @@ def regression():
     if not regression_run_succseeded:
         sys.exit(1)
 
-def load_case_files():
-    rec_data_dir_path = Path("recorded_data/")
+def load_case_files(case_file_pattern):
+    rec_data_dir_path = Path(__file__).parent.parent / "recorded_data"
     recorded_data_files_list = [p for p in rec_data_dir_path.glob('*.tar')]
     if sys.version_info.major == 3:
         recorded_data_files_list.extend([p for p in (rec_data_dir_path / "py3-only").glob('*.tar')])
+
+    if case_file_pattern:
+        print("Running only test cases: {}".format(case_file_pattern))
+        recorded_data_files_list = [p for p in recorded_data_files_list if case_file_pattern in str(p)]
+
     return recorded_data_files_list
 
 def load_saved_errors(untared_data_source_dir):
