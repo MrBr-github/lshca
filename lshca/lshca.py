@@ -1544,7 +1544,7 @@ class MiscCMDs(object):
         if mofed_ver != "=N/A=":
             return "mlnx_ofed-" + mofed_ver
 
-        inbox_ver = self.data_source.exec_shell_cmd("modinfo mlx5_cored", use_cache=True, report_cmd_error=False)
+        inbox_ver = self.data_source.exec_shell_cmd("modinfo mlx5_core", use_cache=True, report_cmd_error=False)
         regex = '^version:\s+([0-9].*)'
         search_result = find_in_list(inbox_ver, regex)
         search_result = extract_string_by_regex(search_result, regex)
