@@ -1538,11 +1538,16 @@ class MiscCMDs(object):
 
     def get_driver_ver(self):
         # type: () -> str
-        mofed_ver = str(self.data_source.exec_shell_cmd("ofed_info -s ", use_cache=True, report_cmd_error=False))
+        mofed_ver_raw = str(self.data_source.exec_shell_cmd("ofed_info -s ", use_cache=True, report_cmd_error=False))
         regex = '.*MLNX_OFED_LINUX-(.*):.*'
-        mofed_ver = extract_string_by_regex(mofed_ver, regex)
+        mofed_ver = extract_string_by_regex(mofed_ver_raw, regex)
         if mofed_ver != "=N/A=":
             return "mlnx_ofed-" + mofed_ver
+
+        regex = '.*OFED-internal-(.*):.*'
+        mofed_ver = extract_string_by_regex(mofed_ver_raw, regex)
+        if mofed_ver != "=N/A=":
+            return "ofed_internal-" + mofed_ver
 
         inbox_ver = self.data_source.exec_shell_cmd("modinfo mlx5_core", use_cache=True, report_cmd_error=False)
         regex = '^version:\s+([0-9].*)'
