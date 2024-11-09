@@ -1,6 +1,6 @@
 ---
 name: lshca-regression
-on: [push, workflow_dispatch, pull_request]
+on: [push, workflow_dispatch]
 jobs:
   run-regression:
     runs-on: ubuntu-20.04
