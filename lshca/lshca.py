@@ -1359,6 +1359,12 @@ class SaSmpQueryDevice(object):
             self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " ND -D  0,1")
             self.sw_description = self.get_info_from_sa_smp_query_data(".*Node *Description.*", "\.+(.*)")
 
+        self.sw_port = ''
+        if virt_hca == "Phys":
+            self.data = self._data_source.exec_shell_cmd("smpquery -C " + self._rdma + " -P " + self._port + " PI -D  0,1")
+            self.sw_port = self.get_info_from_sa_smp_query_data("LocalPort.*", "\.+(.*)")
+            self.sw_description = self.sw_description + ";p" + self.sw_port
+
         # Get SM lid
         self.sm_guid = ''
         if lnk_state != "init":
