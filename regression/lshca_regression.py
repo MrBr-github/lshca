@@ -6,6 +6,7 @@ import argparse
 import difflib
 import hashlib
 import os
+from pathlib import Path
 import pickle
 import re
 import shutil
@@ -152,7 +153,7 @@ def regression():
                                   curr - current data
                                 '''))
     parser.add_argument('--display-recorded-fields', action='store_true', help="Display ONLY originaly recorded fields. Overwrites -p")
-    parser.add_argument('--data-source', nargs="+", help="Select single data souce from recorded_data directory")
+    parser.add_argument('--data-source', help="Select single data souce from recorded_data directory")
     parser.add_argument('-p', dest="parameters", nargs=argparse.REMAINDER,
                         help=textwrap.dedent('''\
                                 override saved parameters and pass new ones
@@ -167,24 +168,7 @@ def regression():
             cust_user_args.append(member)
     args = parser.parse_args(cust_user_args)
 
-    rec_data_dir_path = os.path.dirname(os.path.abspath(__file__)) + "/../recorded_data/"
-    if args.data_source:
-        if os.path.isfile(rec_data_dir_path + str(args.data_source[0])):
-            recorded_data_files_list = [str(args.data_source[0])]
-        else:
-            print("No such data source \"" + str(args.data_source[0]) + "\"")
-            sys.exit(1)
-    else:
-        file_list = os.listdir(rec_data_dir_path)
-        if sys.version_info.major == 3:
-            p3_only_files = os.listdir(os.path.join(rec_data_dir_path, "py3-only"))
-            p3_only_files = [ os.path.join("py3-only", f) for f in p3_only_files ]
-            file_list.extend(p3_only_files)
-
-        recorded_data_files_list = []
-        for file in file_list:
-            if file.endswith('.tar'):
-                recorded_data_files_list.append(file)
+    recorded_data_files_list = load_case_files(args.data_source)
 
     if not recorded_data_files_list:
         print("WARNING: no test cases ran")
@@ -193,45 +177,37 @@ def regression():
     tmp_dir_name = tempfile.mkdtemp(prefix="lshca_regression_")
     regression_run_succseeded = True
     for full_recorded_data_file in recorded_data_files_list:
-        if not os.path.isfile(rec_data_dir_path + full_recorded_data_file):
-            continue
-
-        recorded_data_file = full_recorded_data_file.split('/')[-1]
-        recorded_data_file_prefix = full_recorded_data_file.replace(recorded_data_file, '')
         shutil.copyfile(
-            os.path.join(rec_data_dir_path, recorded_data_file_prefix, recorded_data_file),
-            os.path.join(tmp_dir_name, recorded_data_file)
-            )
-        untared_data_source_dir = tmp_dir_name + "/" + recorded_data_file.replace(".tar", "")
-        os.mkdir(untared_data_source_dir)
+            str(full_recorded_data_file),
+            str(Path(tmp_dir_name) / full_recorded_data_file.name)
+        )
+        untared_data_source_dir = Path(tmp_dir_name) / full_recorded_data_file.stem
+        untared_data_source_dir.mkdir()
 
-        tar = tarfile.open(tmp_dir_name + "/" + recorded_data_file)
-        tar.extractall(path=untared_data_source_dir)
+        tar = tarfile.open(str(Path(tmp_dir_name) / full_recorded_data_file.name))
+        tar.extractall(path=str(untared_data_source_dir))
 
         if args.parameters:
             recorded_sys_args = args.parameters[0].split(" ")
             recorded_sys_args.insert(0, "lshca_run_by_regression")
         else:
-            f = open(untared_data_source_dir + "/cmd", "rb")
             try:
-                recorded_sys_args = pickle.load(f)
+                recorded_sys_args = pickle.loads((untared_data_source_dir / "cmd").read_bytes())
             except ValueError as e:
-                print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+                print("\nFailed unpickling %s \n\n" % str(full_recorded_data_file.name))
                 raise e
 
             recorded_sys_args = recorded_sys_args.split(" ")
             if args.display_recorded_fields:
                 try:
-                    f = open(untared_data_source_dir + "/output_fields", "rb")
-                    recorded_output_fields = pickle.load(f)
+                    recorded_output_fields = pickle.loads((untared_data_source_dir / "output_fields").read_bytes())
                 except:
-                    print(BColors.FAIL + "Error: No output fileds saved in "  + recorded_data_file + BColors.ENDC )
+                    print(BColors.FAIL + "Error: No output fileds saved in "  + full_recorded_data_file.name + BColors.ENDC )
                     sys.exit(1)
                 recorded_sys_args.append("-o")
                 recorded_sys_args.append(",".join(recorded_output_fields))
 
-        f = open(untared_data_source_dir + "/environment", "rb")
-        tmp = pickle.load(f)
+        tmp = pickle.loads((untared_data_source_dir / "environment").read_bytes())
         for item in tmp:
             if 'LSHCA:' in item:
                 recorded_lshca_version = item.split(" ")[1]
@@ -244,7 +220,7 @@ def regression():
             regression_conf = RegressionConfig()
             regression_conf.skip_missing = args.skip_missing
             regression_conf.recorded_lshca_version = recorded_lshca_version
-            main(untared_data_source_dir, recorded_sys_args, regression_conf)
+            main(str(untared_data_source_dir), recorded_sys_args, regression_conf)
         except Exception as e:
             lshca_output = StringIO(str(e))
         finally:
@@ -256,8 +232,8 @@ def regression():
         print("Command: " + " ".join(recorded_sys_args))
         print('**************************************************************************************')
 
-        saved_output = load_saved_output(recorded_data_file, untared_data_source_dir)
-        saved_errors = load_saved_errors(recorded_data_file, untared_data_source_dir)
+        saved_output = load_saved_output(untared_data_source_dir)
+        saved_errors = load_saved_errors(untared_data_source_dir)
 
         print(regression_conf.output_separator_char)
         test_errors = lshca_errors.getvalue()
@@ -277,27 +253,39 @@ def regression():
     if not regression_run_succseeded:
         sys.exit(1)
 
-def load_saved_errors(recorded_data_file, untared_data_source_dir):
+def load_case_files(case_file_pattern):
+    rec_data_dir_path = Path(__file__).parent.parent / "recorded_data"
+    recorded_data_files_list = [p for p in rec_data_dir_path.glob('*.tar')]
+    if sys.version_info.major == 3:
+        recorded_data_files_list.extend([p for p in (rec_data_dir_path / "py3-only").glob('*.tar')])
+
+    if case_file_pattern:
+        print("Running only test cases: {}".format(case_file_pattern))
+        recorded_data_files_list = [p for p in recorded_data_files_list if case_file_pattern in str(p)]
+
+    return recorded_data_files_list
+
+def load_saved_errors(untared_data_source_dir):
     # recording of errors started from version 3.9
     # this comes to handle recordings with missing errors
     saved_errors = None
-    if os.path.exists(untared_data_source_dir + "/errors"):
+    err = untared_data_source_dir / "errors"
+    if err.exists():
         try:
-            f = open(untared_data_source_dir + "/errors", "rb")
-            saved_errors = pickle.load(f)
+            saved_errors = pickle.loads(err.read_bytes())
         except ValueError as e:
-            print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+            print("\nFailed unpickling %s \n\n" % str(err))
             raise e
     else:
         print("{}Warring{}: Missing recorded errors".format(BColors.WARNING, BColors.ENDC))
     return saved_errors
 
-def load_saved_output(recorded_data_file, untared_data_source_dir):
+def load_saved_output(untared_data_source_dir):
+    out = untared_data_source_dir / "output"
     try:
-        f = open(untared_data_source_dir + "/output", "rb")
-        saved_output = pickle.load(f)
+        saved_output = pickle.loads(out.read_bytes())
     except ValueError as e:
-        print("\nFailed unpickling %s \n\n" % str(recorded_data_file))
+        print("\nFailed unpickling %s \n\n" % str(out))
         raise e
     return saved_output
 
