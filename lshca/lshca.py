@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # Description: This utility comes to provide bird's-eye view of HCAs installed.
@@ -8,8 +8,6 @@
 # Project repo: https://github.com/MrBr-github/lshca
 # License: This utility provided under GNU GPLv3 license
 
-from __future__ import division
-from __future__ import print_function
 import argparse
 import ctypes
 import fcntl
@@ -30,10 +28,7 @@ import textwrap
 import time
 
 
-try:
-    from StringIO import StringIO # for Python 2
-except ImportError:
-    from io import StringIO, BytesIO # for Python 3
+from io import StringIO, BytesIO
 
 
 class Config(object):
@@ -2186,9 +2181,6 @@ class LldpData:
 
     def get_data(self, net, ip_state, bond_master):
         # type: (str, str, str) -> None
-        if sys.version_info[0] < 3:
-            raise Exception("Getting LLDP data requires Python3")
-
         self._interface = net
         self._bond_master = bond_master
 
@@ -2393,12 +2385,7 @@ class DataSource(object):
     def record_data_to_tar(self, file_name, data):
         # type: (str, str) -> None
             p_data = pickle.dumps(data)
-
-            if sys.version_info.major == 3:
-                tar_contents = BytesIO(p_data)
-            else:
-                tar_contents = StringIO(p_data)
-
+            tar_contents = BytesIO(p_data)
             tarinfo = tarfile.TarInfo(file_name)
             tarinfo.size = len(p_data)
             tarinfo.mtime = time.time()
