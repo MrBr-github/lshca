@@ -32,8 +32,7 @@ from io import StringIO, BytesIO
 
 
 class Config(object):
-    def __init__(self):
-        # type: () -> None
+    def __init__(self) -> None:
         self.log_level = "" # set by argparse
 
         self.output_view = "system"
@@ -85,8 +84,7 @@ class Config(object):
         # based on https://docs.mellanox.com/pages/viewpage.action?pageId=43714202#LinkLayerDiscoveryProtocol(LLDP)-lldptimer
         self.lldp_capture_timeout = 35 # seconds. Based on default 30s value in Mellanox Onyx OS
 
-    def parse_arguments(self, user_args):
-        # type: (list) -> None
+    def parse_arguments(self, user_args: list) -> None:
         parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
                                          epilog=textwrap.dedent('''\
                      Output warnings and errors:
@@ -160,8 +158,7 @@ class Config(object):
         args = parser.parse_args(cust_user_args)
         self.process_arguments(args)
 
-    def process_arguments(self, args):
-        # type: (argparse.Namespace) -> None
+    def process_arguments(self, args: argparse.Namespace) -> None:
         if args.mode == "record":
             self.record_data_for_debug = True
 
@@ -217,8 +214,7 @@ class Config(object):
 
         self.colour_warnings_and_errors = args.colour
 
-    def extended_help(self):
-        # type: () -> None
+    def extended_help(self) -> None:
         extended_help = textwrap.dedent("""
         --== Detailed fields description ==--
         Note: BDF is a Bus-Device-Function PCI address. Each HCA port/vf has unique BDF.
