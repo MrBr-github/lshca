@@ -2243,8 +2243,7 @@ class RshimDevice(object):
 
 
 class DataSource(object):
-    def __init__(self, config):
-        # type: (Config) -> None
+    def __init__(self, config: Config) -> None:
         self.cache = {}
         self.config = config
         self.interfaces_struct = []
@@ -2275,8 +2274,7 @@ class DataSource(object):
         self.log.setLevel(self.config.log_level)
         self.log.addHandler(log_handler)
 
-    def __del__(self):
-        # type: () -> None
+    def __del__(self) -> None:
         if self.config.record_data_for_debug is True:
             sys.stdout = sys.__stdout__
             try:
@@ -2300,9 +2298,7 @@ class DataSource(object):
 
             self.tar.close()
 
-
-    def exec_shell_cmd(self, cmd, use_cache=False, splitlines=True, report_cmd_error=True):
-        # type: (str, bool, bool, bool) -> list
+    def exec_shell_cmd(self, cmd: str, use_cache: bool = False, splitlines: bool = True, report_cmd_error: bool = True ) -> list:
         timeout = 10
         cache_key = self.cmd_to_str(cmd)
 
@@ -2343,8 +2339,7 @@ class DataSource(object):
 
         return output
 
-    def get_bdf_data_from_lspci(self, bdf, use_cache=True):
-        # type: (str, bool) -> dict
+    def get_bdf_data_from_lspci(self, bdf: str , use_cache: bool = True) -> dict:
         cmd = "lspci -vvvDnnd 15b3:"
 
         lspci_dict_cache_key = self.cmd_to_str(cmd + "lspci_dictionary")
@@ -2372,14 +2367,12 @@ class DataSource(object):
         output = d_output.get(bdf, "").splitlines()
         return output
 
-    def record_data(self, cmd, output, error=""):
-        # type: (str, list, str) -> None
+    def record_data(self, cmd: str, output: list, error: str = "") -> None:
         self.record_data_to_tar(cmd, output)
         if error:
             self.record_data_to_tar('{}__ERROR'.format(cmd), error)
 
-    def record_data_to_tar(self, file_name, data):
-        # type: (str, str) -> None
+    def record_data_to_tar(self, file_name: str, data: str) -> None:
             p_data = pickle.dumps(data)
             tar_contents = BytesIO(p_data)
             tarinfo = tarfile.TarInfo(file_name)
@@ -2387,8 +2380,7 @@ class DataSource(object):
             tarinfo.mtime = time.time()
             self.tar.addfile(tarinfo, tar_contents)
 
-    def read_file_if_exists(self, file_to_read, record_suffix="", use_cache=False):
-        # type: (str, str, bool) -> str
+    def read_file_if_exists(self, file_to_read: str, record_suffix: str = "", use_cache: bool = False) -> str:
         cache_key = self.cmd_to_str(str(file_to_read) + str(record_suffix))
 
         if use_cache is True and cache_key in self.cache:
@@ -2417,8 +2409,7 @@ class DataSource(object):
 
         return output
 
-    def read_link_if_exists(self, link_to_read):
-        # type: (str) -> str
+    def read_link_if_exists(self, link_to_read: str) -> str:
         try:
             output = os.readlink(link_to_read)
         except OSError as exception:
@@ -2434,8 +2425,7 @@ class DataSource(object):
 
         return output
 
-    def list_dir_if_exists(self, dir_to_list):
-        # type: (str) -> str
+    def list_dir_if_exists(self, dir_to_list: str) -> str:
         try:
             output = os.listdir(dir_to_list)
             output = " ".join(output)
@@ -2452,8 +2442,7 @@ class DataSource(object):
 
         return output
 
-    def exec_python_code(self, python_code, record_suffix="", use_cache=False):
-        # type: (str, str, bool) -> str
+    def exec_python_code(self, python_code: str, record_suffix: str = "", use_cache: bool = False) -> str:
         cache_key = self.cmd_to_str(str(python_code) + str(record_suffix))
 
         if use_cache is True and cache_key in self.cache:
@@ -2470,8 +2459,7 @@ class DataSource(object):
 
         return output
 
-    def get_raw_socket_data(self, interface, ether_proto, capture_timeout, use_cache=True):
-        # type: (str, int, int, bool) -> str
+    def get_raw_socket_data(self, interface: str, ether_proto: int, capture_timeout: int, use_cache: bool = True) -> str:
         cache_key = self.cmd_to_str(str(interface) + str(ether_proto))
 
         if use_cache is True and cache_key in self.cache:
@@ -2515,7 +2503,7 @@ class DataSource(object):
 
         return output
 
-    def signal_recieved(self, signal_number, stack_frame):
+    def signal_recieved(self, signal_number: str, stack_frame) -> None:
         interfaces_affected = ""
         for int_str in self.interfaces_struct:
             self._set_interface_promisc_status(int_str["interface"], int_str["socket"], False)
@@ -2528,8 +2516,7 @@ class DataSource(object):
             print("\nSignal '{}' recieved. Interfaces {} set as non-promisc. Exiting".format(signal_number, interfaces_affected), file=sys.stderr)
             sys.exit(1)
 
-    def _set_interface_promisc_status(self, interface, raw_socket, promisc):
-        # type: (str, socket.socket, bool) -> None
+    def _set_interface_promisc_status(self, interface: str, raw_socket: socket.socket, promisc: bool) -> None:
         IFF_PROMISC = 0x100             # Set interface promiscuous
         SIOCGIFFLAGS = 0x8913           # Get flags  SIOC G IF FLAGS
         SIOCSIFFLAGS = 0x8914           # Set flags  SIOC S IF FLAGS
@@ -2545,8 +2532,7 @@ class DataSource(object):
         fcntl.ioctl(raw_socket.fileno(), SIOCSIFFLAGS, ifr) # S for Set
 
     @staticmethod
-    def cmd_to_str(cmd):
-        # type: (str) -> str
+    def cmd_to_str(cmd: str) -> str:
         output = re.escape(cmd)
         return output
 
