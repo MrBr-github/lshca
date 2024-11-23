@@ -158,9 +158,7 @@ class Config(object):
         # comes to handle comma separated list of choices
         cust_user_args = []
         for arg in user_args:
-            result = arg.split(",")
-            for member in result:
-                cust_user_args.append(member)
+            cust_user_args = [x for x in arg.split(",")]
 
         args = parser.parse_args(cust_user_args)
         self.process_arguments(args)
@@ -404,7 +402,6 @@ class HCAManager(object):
                     sf_dev.get_data()
                     mlnx_bdf_devices.append(sf_dev)
 
-
                 if port_count >= len(bdf_dev.port_list):
                     break
 
@@ -500,12 +497,12 @@ class Output(object):
 
     def append(self, data):
         self.output.append(data)
-
+    
     def apply_select_output_filters(self):
         # type: () -> None
-        if len(self.config.output_fields_filter_positive) > 0:
+        if self.config.output_fields_filter_positive:
             self.output_order = self.config.output_fields_filter_positive
-        elif len(self.config.output_fields_filter_negative) > 0:
+        elif self.config.output_fields_filter_negative:
             decrement_list = self.output_order
 
             output_filter = self.config.output_fields_filter_negative
@@ -516,7 +513,7 @@ class Output(object):
             self.output_order = decrement_list
 
         data_keys_remove_list = []
-        if len(self.output) > 0:
+        if self.output:
             output_data_keys = list(self.output[0]) + list(self.output[0]["bdf_devices"][0])
             data_keys_remove_list = list(set(output_data_keys) - set(self.output_order))
 
@@ -694,22 +691,18 @@ class Output(object):
         # first pass: collect all of the maximum widths for each of the BDF fields
         hca_field_line_width = 0
         for hca in self.output:
-            for key in hca:
-                if key == "bdf_devices":
-                    for bdf_device in hca["bdf_devices"]:
-                        for bdf_key in bdf_device:
-                            if bdf_key in self.output_order:
-                                # decide what is longer the key name or it's value
-                                if len(bdf_device[bdf_key]) > len(bdf_key):
-                                    width = len(bdf_device[bdf_key])
-                                else:
-                                    width = len(bdf_key)
+            bdf_devices = [hca[x] for x in hca if x=="bdf_devices"]
+            for bdf_device in bdf_devices:
+                for bdf_key in bdf_device:
+                    if bdf_key in self.output_order:
+                        # decide what is longer the key name or it's value
+                        width = max([len(bdf_device[bdf_key]),len(bdf_key)])
 
-                                if bdf_key not in self.column_width:
-                                    self.column_width[bdf_key] = width
+                        if bdf_key not in self.column_width:
+                            self.column_width[bdf_key] = width
 
-                                if width > self.column_width[bdf_key]:
-                                    self.column_width[bdf_key] = width
+                        if width > self.column_width[bdf_key]:
+                            self.column_width[bdf_key] = width
 
         # second pass: calculate width of BDF and HCA lines
         for hca in self.output:
@@ -779,11 +772,9 @@ class Output(object):
         # type: (dict) -> None
         order_dict = {}
 
-        position = 0
-        for key in self.output_order:
+        for idx, key in enumerate(self.output_order):
             if key in args:
-                order_dict[key] = position
-                position += 1
+                order_dict[key] = idx
 
         output_list = [""] * len(order_dict)
         for key in args:
