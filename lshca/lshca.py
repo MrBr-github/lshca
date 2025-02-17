@@ -362,6 +362,301 @@ class Config(object):
         sys.exit(0)
 
 
+class DataSource(object):
+    def __init__(self, config: Config) -> None:
+        self.cache = {}
+        self.config = config
+        self.interfaces_struct = []
+
+        self.logging_stream = sys.stderr
+        if self.config.record_data_for_debug is True:
+            if not os.path.exists(self.config.record_dir):
+                os.makedirs(self.config.record_dir)
+
+            self.config.record_tar_file = "%s/%s--%s--%s--v%s.tar" % (self.config.record_dir, os.uname()[1], str(self.config.output_view).upper(),
+                                                                  str(time.time()), self.config.ver)
+
+            print("\nlshca started data recording")
+            print("output saved in " + self.config.record_tar_file + " file\n")
+            self.tar = tarfile.open(name=self.config.record_tar_file, mode='a')
+
+            self.stdout = StringIO()
+            sys.stdout = self.stdout
+
+            self.logging_stream = StringIO()
+
+        log_formater = logging.Formatter('%(levelname)s - %(message)s')
+        log_handler = logging.StreamHandler(self.logging_stream)
+        log_handler.setFormatter(log_formater)
+
+        log_handler.setLevel(self.config.log_level)
+        self.log = logging.getLogger("lshcaLogger")
+        self.log.setLevel(self.config.log_level)
+        self.log.addHandler(log_handler)
+
+    def __del__(self) -> None:
+        if self.config.record_data_for_debug is True:
+            sys.stdout = sys.__stdout__
+            try:
+                args_str = " ".join(sys.argv[1:])
+            except:
+                args_str = ""
+            self.record_data("cmd", "lshca " + args_str)
+            self.record_data("output", self.stdout.getvalue())
+            self.record_data("errors", self.logging_stream.getvalue())
+
+            self.config.record_data_for_debug = False
+            environment = list()
+            environment.append("LSHCA: " + self.config.ver)
+            environment.append("OFED: " + " ".join(self.exec_shell_cmd("ofed_info -s")))
+            environment.append("MST:  " + " ".join(self.exec_shell_cmd("mst version")))
+            environment.append("Uname:  " + " ".join(self.exec_shell_cmd("uname -a")))
+            environment.append("Release:  " + " ".join(self.exec_shell_cmd("cat /etc/*release")))
+            environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
+            self.record_data("environment", environment)
+            self.record_data("output_fields", self.config.output_order)
+
+            self.tar.close()
+
+    def exec_shell_cmd(self, cmd: str, use_cache: bool = False, splitlines: bool = True, report_cmd_error: bool = True ) -> list:
+        timeout = 10
+        cache_key = self.cmd_to_str(cmd)
+
+        if use_cache is True and cache_key in self.cache:
+            output = self.cache[cache_key]
+            error = ""
+        else:
+            # using shell timeout, because python subprocess timeout requres Python 3.3+
+            cmd_with_timeout = "timeout {} {}".format(timeout, cmd)
+            process = subprocess.Popen(cmd_with_timeout,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    shell=True,
+                                    executable="/bin/bash")
+            output, error = process.communicate()
+            if process.returncode == 124:
+                # report_cmd_error not used here because timeout is an issue that should be always reported,
+                # but missing cmd that returs an error might be acceptable
+                self.log.error('Following cmd failed due to timeout of {}s.\n\tCMD: {}'.format(timeout, cmd))
+            if error:
+                if isinstance(error, bytes):
+                    error = error.decode()
+                error = re.sub(r'timeout: ', '', error.strip())
+                if report_cmd_error:
+                    self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
+            if isinstance(output, bytes):
+                output = output.decode('utf8')
+
+            if use_cache is True:
+                self.cache.update({cache_key: output})
+
+        if self.config.record_data_for_debug is True:
+            cmd = "shell.cmd/" + cmd
+            self.record_data(cmd, output, error)
+
+        if splitlines:
+            output = output.splitlines()
+
+        return output
+
+    def get_bdf_data_from_lspci(self, bdf: str , use_cache: bool = True) -> dict:
+        cmd = "lspci -vvvDnnd 15b3:"
+
+        lspci_dict_cache_key = self.cmd_to_str(cmd + "lspci_dictionary")
+        if use_cache is True and lspci_dict_cache_key in self.cache:
+            d_output = self.cache[lspci_dict_cache_key]
+        else:
+            lspci_cache_key = self.cmd_to_str(cmd)
+            if use_cache is True and lspci_cache_key in self.cache:
+                data = self.cache[lspci_cache_key]
+            else:
+                data = self.exec_shell_cmd(cmd, use_cache=True, splitlines=False)
+
+                if use_cache is True:
+                    self.cache.update({lspci_cache_key: data})
+
+            l_output = data.strip().split("\n\n")
+
+            d_output = {}
+            for raw_bdf in l_output:
+                d_output[raw_bdf.split(" ")[0]] = raw_bdf
+
+            if use_cache is True:
+                self.cache.update({lspci_dict_cache_key: d_output})
+
+        output = d_output.get(bdf, "").splitlines()
+        return output
+
+    def record_data(self, cmd: str, output: list, error: str = "") -> None:
+        self.record_data_to_tar(cmd, output)
+        if error:
+            self.record_data_to_tar('{}__ERROR'.format(cmd), error)
+
+    def record_data_to_tar(self, file_name: str, data: str) -> None:
+            p_data = pickle.dumps(data)
+            tar_contents = BytesIO(p_data)
+            tarinfo = tarfile.TarInfo(file_name)
+            tarinfo.size = len(p_data)
+            tarinfo.mtime = time.time()
+            self.tar.addfile(tarinfo, tar_contents)
+
+    def read_file_if_exists(self, file_to_read: str, record_suffix: str = "", use_cache: bool = False) -> str:
+        cache_key = self.cmd_to_str(str(file_to_read) + str(record_suffix))
+
+        if use_cache is True and cache_key in self.cache:
+            output = self.cache[cache_key]
+        else:
+            if os.path.exists(file_to_read):
+                f = open(file_to_read, "r")
+                try:
+                    output = f.read()
+                except (IOError, TypeError) as exception:
+                    print("Driver error: failed to read {}".format(file_to_read), file=sys.stderr)
+                    output = ""
+                except Exception as e:
+                    print("\n\nFailed to read file" + str(file_to_read) + "\n\n")
+                    raise
+                f.close()
+            else:
+                output = ""
+
+            if use_cache is True:
+                self.cache.update({cache_key: output})
+
+        if self.config.record_data_for_debug is True:
+            cmd = "os.path.exists" + file_to_read + record_suffix
+            self.record_data(cmd, output)
+
+        return output
+
+    def read_link_if_exists(self, link_to_read: str) -> str:
+        try:
+            output = os.readlink(link_to_read)
+        except OSError as exception:
+            # if OSError: [Errno 2] No such file or directory
+            if exception.errno == 2:
+                output = ""
+            else:
+                raise exception
+
+        if self.config.record_data_for_debug is True:
+            cmd = "os.readlink" + link_to_read
+            self.record_data(cmd, output)
+
+        return output
+
+    def list_dir_if_exists(self, dir_to_list: str) -> str:
+        try:
+            output = os.listdir(dir_to_list)
+            output = " ".join(output)
+        except OSError as exception:
+            # if OSError: [Errno 2] No such file or directory
+            if exception.errno == 2:
+                output = ""
+            else:
+                raise exception
+
+        if self.config.record_data_for_debug is True:
+            cmd = "os.listdir" + dir_to_list.rstrip('/') + "_dir"
+            self.record_data(cmd, output)
+
+        return output
+
+    def exec_python_code(self, python_code: str, record_suffix: str = "", use_cache: bool = False) -> str:
+        cache_key = self.cmd_to_str(str(python_code) + str(record_suffix))
+
+        if use_cache is True and cache_key in self.cache:
+            output = self.cache[cache_key]
+        else:
+            output = eval(python_code)
+
+            if use_cache is True:
+                self.cache.update({cache_key: output})
+
+        if self.config.record_data_for_debug is True:
+            cmd = "os.python.code/" + hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix
+            self.record_data(cmd, output)
+
+        return output
+
+    def get_raw_socket_data(self, interface: str, ether_proto: int, capture_timeout: int, use_cache: bool = True) -> str:
+        cache_key = self.cmd_to_str(str(interface) + str(ether_proto))
+
+        if use_cache is True and cache_key in self.cache:
+            output = self.cache[cache_key]
+        else:
+            try:
+                raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ether_proto))
+            except socket.error as e:
+                    print('Socket could not be created. {}'.format(e))
+                    sys.exit()
+
+            try:
+                raw_socket.bind((interface, ether_proto))
+                self.interfaces_struct.append({"interface":interface, "socket": raw_socket})
+                self._set_interface_promisc_status(interface, raw_socket, True)
+            except Exception as e:
+                print("Tried connecting interface '{}'".format(interface))
+                raise e
+
+            signal.signal(signal.SIGINT, self.signal_recieved)
+            signal.signal(signal.SIGALRM, self.signal_recieved)
+            signal.alarm(capture_timeout)
+
+            try:
+                output = raw_socket.recvfrom(65565)
+            except TimeoutError:
+                output = "TimeoutError"
+
+            signal.alarm(0)
+            self._set_interface_promisc_status(interface, raw_socket, False)
+            self.interfaces_struct.remove({"interface":interface, "socket": raw_socket})
+            signal.signal(signal.SIGINT, signal.SIG_DFL)
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+
+            if use_cache is True:
+                self.cache.update({cache_key: output})
+
+        if self.config.record_data_for_debug is True:
+            cmd = "raw.socket.data/" + cache_key
+            self.record_data(cmd, output)
+
+        return output
+
+    def signal_recieved(self, signal_number: str, stack_frame) -> None:
+        interfaces_affected = ""
+        for int_str in self.interfaces_struct:
+            self._set_interface_promisc_status(int_str["interface"], int_str["socket"], False)
+            interfaces_affected += " " + str(int_str["interface"])
+
+        # SIGALRM = 14
+        if signal_number == 14:
+            raise TimeoutError
+        else:
+            print("\nSignal '{}' recieved. Interfaces {} set as non-promisc. Exiting".format(signal_number, interfaces_affected), file=sys.stderr)
+            sys.exit(1)
+
+    def _set_interface_promisc_status(self, interface: str, raw_socket: socket.socket, promisc: bool) -> None:
+        IFF_PROMISC = 0x100             # Set interface promiscuous
+        SIOCGIFFLAGS = 0x8913           # Get flags  SIOC G IF FLAGS
+        SIOCSIFFLAGS = 0x8914           # Set flags  SIOC S IF FLAGS
+
+        ifr = ifreq()
+        ifr.ifr_ifrn = interface.encode('UTF-8')
+
+        fcntl.ioctl(raw_socket.fileno(), SIOCGIFFLAGS, ifr)
+        if promisc:
+            ifr.ifr_flags |= IFF_PROMISC # Add promisc flag
+        else:
+            ifr.ifr_flags &= ~IFF_PROMISC # Remove promisc flag
+        fcntl.ioctl(raw_socket.fileno(), SIOCSIFFLAGS, ifr) # S for Set
+
+    @staticmethod
+    def cmd_to_str(cmd: str) -> str:
+        output = re.escape(cmd)
+        return output
+
+
 class HCAManager(object):
     def __init__(self, data_source, config):
         # type: (DataSource, Config) -> None
@@ -2240,301 +2535,6 @@ class RshimDevice(object):
             if addr.split('.')[0] == self._bdf.split('.')[0]:
                 self.rshim_dev = curr_rshim_dev
                 break
-
-
-class DataSource(object):
-    def __init__(self, config: Config) -> None:
-        self.cache = {}
-        self.config = config
-        self.interfaces_struct = []
-
-        self.logging_stream = sys.stderr
-        if self.config.record_data_for_debug is True:
-            if not os.path.exists(self.config.record_dir):
-                os.makedirs(self.config.record_dir)
-
-            self.config.record_tar_file = "%s/%s--%s--%s--v%s.tar" % (self.config.record_dir, os.uname()[1], str(self.config.output_view).upper(),
-                                                                  str(time.time()), self.config.ver)
-
-            print("\nlshca started data recording")
-            print("output saved in " + self.config.record_tar_file + " file\n")
-            self.tar = tarfile.open(name=self.config.record_tar_file, mode='a')
-
-            self.stdout = StringIO()
-            sys.stdout = self.stdout
-
-            self.logging_stream = StringIO()
-
-        log_formater = logging.Formatter('%(levelname)s - %(message)s')
-        log_handler = logging.StreamHandler(self.logging_stream)
-        log_handler.setFormatter(log_formater)
-
-        log_handler.setLevel(self.config.log_level)
-        self.log = logging.getLogger("lshcaLogger")
-        self.log.setLevel(self.config.log_level)
-        self.log.addHandler(log_handler)
-
-    def __del__(self) -> None:
-        if self.config.record_data_for_debug is True:
-            sys.stdout = sys.__stdout__
-            try:
-                args_str = " ".join(sys.argv[1:])
-            except:
-                args_str = ""
-            self.record_data("cmd", "lshca " + args_str)
-            self.record_data("output", self.stdout.getvalue())
-            self.record_data("errors", self.logging_stream.getvalue())
-
-            self.config.record_data_for_debug = False
-            environment = list()
-            environment.append("LSHCA: " + self.config.ver)
-            environment.append("OFED: " + " ".join(self.exec_shell_cmd("ofed_info -s")))
-            environment.append("MST:  " + " ".join(self.exec_shell_cmd("mst version")))
-            environment.append("Uname:  " + " ".join(self.exec_shell_cmd("uname -a")))
-            environment.append("Release:  " + " ".join(self.exec_shell_cmd("cat /etc/*release")))
-            environment.append("Env:  " + " ".join(self.exec_shell_cmd("env")))
-            self.record_data("environment", environment)
-            self.record_data("output_fields", self.config.output_order)
-
-            self.tar.close()
-
-    def exec_shell_cmd(self, cmd: str, use_cache: bool = False, splitlines: bool = True, report_cmd_error: bool = True ) -> list:
-        timeout = 10
-        cache_key = self.cmd_to_str(cmd)
-
-        if use_cache is True and cache_key in self.cache:
-            output = self.cache[cache_key]
-            error = ""
-        else:
-            # using shell timeout, because python subprocess timeout requres Python 3.3+
-            cmd_with_timeout = "timeout {} {}".format(timeout, cmd)
-            process = subprocess.Popen(cmd_with_timeout,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    shell=True,
-                                    executable="/bin/bash")
-            output, error = process.communicate()
-            if process.returncode == 124:
-                # report_cmd_error not used here because timeout is an issue that should be always reported,
-                # but missing cmd that returs an error might be acceptable
-                self.log.error('Following cmd failed due to timeout of {}s.\n\tCMD: {}'.format(timeout, cmd))
-            if error:
-                if isinstance(error, bytes):
-                    error = error.decode()
-                error = re.sub(r'timeout: ', '', error.strip())
-                if report_cmd_error:
-                    self.log.error('Following cmd returned and error message.\n\tCMD: {}\n\tMsg: {}'.format(cmd, error))
-            if isinstance(output, bytes):
-                output = output.decode('utf8')
-
-            if use_cache is True:
-                self.cache.update({cache_key: output})
-
-        if self.config.record_data_for_debug is True:
-            cmd = "shell.cmd/" + cmd
-            self.record_data(cmd, output, error)
-
-        if splitlines:
-            output = output.splitlines()
-
-        return output
-
-    def get_bdf_data_from_lspci(self, bdf: str , use_cache: bool = True) -> dict:
-        cmd = "lspci -vvvDnnd 15b3:"
-
-        lspci_dict_cache_key = self.cmd_to_str(cmd + "lspci_dictionary")
-        if use_cache is True and lspci_dict_cache_key in self.cache:
-            d_output = self.cache[lspci_dict_cache_key]
-        else:
-            lspci_cache_key = self.cmd_to_str(cmd)
-            if use_cache is True and lspci_cache_key in self.cache:
-                data = self.cache[lspci_cache_key]
-            else:
-                data = self.exec_shell_cmd(cmd, use_cache=True, splitlines=False)
-
-                if use_cache is True:
-                    self.cache.update({lspci_cache_key: data})
-
-            l_output = data.strip().split("\n\n")
-
-            d_output = {}
-            for raw_bdf in l_output:
-                d_output[raw_bdf.split(" ")[0]] = raw_bdf
-
-            if use_cache is True:
-                self.cache.update({lspci_dict_cache_key: d_output})
-
-        output = d_output.get(bdf, "").splitlines()
-        return output
-
-    def record_data(self, cmd: str, output: list, error: str = "") -> None:
-        self.record_data_to_tar(cmd, output)
-        if error:
-            self.record_data_to_tar('{}__ERROR'.format(cmd), error)
-
-    def record_data_to_tar(self, file_name: str, data: str) -> None:
-            p_data = pickle.dumps(data)
-            tar_contents = BytesIO(p_data)
-            tarinfo = tarfile.TarInfo(file_name)
-            tarinfo.size = len(p_data)
-            tarinfo.mtime = time.time()
-            self.tar.addfile(tarinfo, tar_contents)
-
-    def read_file_if_exists(self, file_to_read: str, record_suffix: str = "", use_cache: bool = False) -> str:
-        cache_key = self.cmd_to_str(str(file_to_read) + str(record_suffix))
-
-        if use_cache is True and cache_key in self.cache:
-            output = self.cache[cache_key]
-        else:
-            if os.path.exists(file_to_read):
-                f = open(file_to_read, "r")
-                try:
-                    output = f.read()
-                except (IOError, TypeError) as exception:
-                    print("Driver error: failed to read {}".format(file_to_read), file=sys.stderr)
-                    output = ""
-                except Exception as e:
-                    print("\n\nFailed to read file" + str(file_to_read) + "\n\n")
-                    raise
-                f.close()
-            else:
-                output = ""
-
-            if use_cache is True:
-                self.cache.update({cache_key: output})
-
-        if self.config.record_data_for_debug is True:
-            cmd = "os.path.exists" + file_to_read + record_suffix
-            self.record_data(cmd, output)
-
-        return output
-
-    def read_link_if_exists(self, link_to_read: str) -> str:
-        try:
-            output = os.readlink(link_to_read)
-        except OSError as exception:
-            # if OSError: [Errno 2] No such file or directory
-            if exception.errno == 2:
-                output = ""
-            else:
-                raise exception
-
-        if self.config.record_data_for_debug is True:
-            cmd = "os.readlink" + link_to_read
-            self.record_data(cmd, output)
-
-        return output
-
-    def list_dir_if_exists(self, dir_to_list: str) -> str:
-        try:
-            output = os.listdir(dir_to_list)
-            output = " ".join(output)
-        except OSError as exception:
-            # if OSError: [Errno 2] No such file or directory
-            if exception.errno == 2:
-                output = ""
-            else:
-                raise exception
-
-        if self.config.record_data_for_debug is True:
-            cmd = "os.listdir" + dir_to_list.rstrip('/') + "_dir"
-            self.record_data(cmd, output)
-
-        return output
-
-    def exec_python_code(self, python_code: str, record_suffix: str = "", use_cache: bool = False) -> str:
-        cache_key = self.cmd_to_str(str(python_code) + str(record_suffix))
-
-        if use_cache is True and cache_key in self.cache:
-            output = self.cache[cache_key]
-        else:
-            output = eval(python_code)
-
-            if use_cache is True:
-                self.cache.update({cache_key: output})
-
-        if self.config.record_data_for_debug is True:
-            cmd = "os.python.code/" + hashlib.md5(python_code.encode('utf-8')).hexdigest() + record_suffix
-            self.record_data(cmd, output)
-
-        return output
-
-    def get_raw_socket_data(self, interface: str, ether_proto: int, capture_timeout: int, use_cache: bool = True) -> str:
-        cache_key = self.cmd_to_str(str(interface) + str(ether_proto))
-
-        if use_cache is True and cache_key in self.cache:
-            output = self.cache[cache_key]
-        else:
-            try:
-                raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ether_proto))
-            except socket.error as e:
-                    print('Socket could not be created. {}'.format(e))
-                    sys.exit()
-
-            try:
-                raw_socket.bind((interface, ether_proto))
-                self.interfaces_struct.append({"interface":interface, "socket": raw_socket})
-                self._set_interface_promisc_status(interface, raw_socket, True)
-            except Exception as e:
-                print("Tried connecting interface '{}'".format(interface))
-                raise e
-
-            signal.signal(signal.SIGINT, self.signal_recieved)
-            signal.signal(signal.SIGALRM, self.signal_recieved)
-            signal.alarm(capture_timeout)
-
-            try:
-                output = raw_socket.recvfrom(65565)
-            except TimeoutError:
-                output = "TimeoutError"
-
-            signal.alarm(0)
-            self._set_interface_promisc_status(interface, raw_socket, False)
-            self.interfaces_struct.remove({"interface":interface, "socket": raw_socket})
-            signal.signal(signal.SIGINT, signal.SIG_DFL)
-            signal.signal(signal.SIGALRM, signal.SIG_DFL)
-
-            if use_cache is True:
-                self.cache.update({cache_key: output})
-
-        if self.config.record_data_for_debug is True:
-            cmd = "raw.socket.data/" + cache_key
-            self.record_data(cmd, output)
-
-        return output
-
-    def signal_recieved(self, signal_number: str, stack_frame) -> None:
-        interfaces_affected = ""
-        for int_str in self.interfaces_struct:
-            self._set_interface_promisc_status(int_str["interface"], int_str["socket"], False)
-            interfaces_affected += " " + str(int_str["interface"])
-
-        # SIGALRM = 14
-        if signal_number == 14:
-            raise TimeoutError
-        else:
-            print("\nSignal '{}' recieved. Interfaces {} set as non-promisc. Exiting".format(signal_number, interfaces_affected), file=sys.stderr)
-            sys.exit(1)
-
-    def _set_interface_promisc_status(self, interface: str, raw_socket: socket.socket, promisc: bool) -> None:
-        IFF_PROMISC = 0x100             # Set interface promiscuous
-        SIOCGIFFLAGS = 0x8913           # Get flags  SIOC G IF FLAGS
-        SIOCSIFFLAGS = 0x8914           # Set flags  SIOC S IF FLAGS
-
-        ifr = ifreq()
-        ifr.ifr_ifrn = interface.encode('UTF-8')
-
-        fcntl.ioctl(raw_socket.fileno(), SIOCGIFFLAGS, ifr)
-        if promisc:
-            ifr.ifr_flags |= IFF_PROMISC # Add promisc flag
-        else:
-            ifr.ifr_flags &= ~IFF_PROMISC # Remove promisc flag
-        fcntl.ioctl(raw_socket.fileno(), SIOCSIFFLAGS, ifr) # S for Set
-
-    @staticmethod
-    def cmd_to_str(cmd: str) -> str:
-        output = re.escape(cmd)
-        return output
 
 
 class BColors:
