@@ -1190,14 +1190,12 @@ class MSTDevice(object):
 
 
 class PCIDevice(object):
-    def __init__(self, bdf, data_source, config):
-        # type: (str, DataSource, Config) -> None
+    def __init__(self, bdf: str, data_source: DataSource, config: Config) -> None:
         self._bdf = bdf
         self._config = config
         self._data_source = data_source
 
-    def get_data(self):
-        # type: () -> None
+    def get_data(self) -> None:
         self._data = self._data_source.get_bdf_data_from_lspci(self._bdf)
         # Handling following string, taking reset of string after HCA type
         # 0000:01:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
@@ -1236,8 +1234,7 @@ class PCIDevice(object):
         if root_device_made_by_mellanox:
             self._inside_dpu = True
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         delim = " "
         return "PCI device:" + delim +\
                self._bdf + delim + \
@@ -1246,22 +1243,19 @@ class PCIDevice(object):
                "\"" + self.description + "\""
 
     @property
-    def pn(self):
-        # type: () -> str
+    def pn(self) -> str:
         if self.revision != "=N/A=":
             return self._pn + "  rev. " + self.revision
         else:
             return self._pn
 
-    def get_info_from_lspci_data(self, search_regex, output_regex):
-        # type: (re.Pattern, re.Pattern) -> str
+    def get_info_from_lspci_data(self, search_regex: re.Pattern, output_regex: re.Pattern) -> str:
         search_result = find_in_list(self._data, search_regex)
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
 
     @staticmethod
-    def pci_speed_to_pci_gen(speed):
-        # type: (str) -> str
+    def pci_speed_to_pci_gen(speed: str) -> str:
         if str(speed) == "2.5":
             gen = "1"
         elif str(speed) == "5":
