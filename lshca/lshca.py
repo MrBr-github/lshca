@@ -1602,8 +1602,7 @@ class SYSFSDevice(object):
 
 
 class SaSmpQueryDevice(object):
-    def __init__(self,  data_source, config):
-        # type: (DataSource, Config) -> None
+    def __init__(self,  data_source: DataSource, config: Config) -> None:
         self._data_source = data_source
         self._config = config
 
@@ -1611,8 +1610,7 @@ class SaSmpQueryDevice(object):
         self.sw_description = ""
         self.sm_guid = ""
 
-    def get_data(self, rdma, port, smlid, lnk_state, virt_hca):
-        # type: (str, str, str, str, str) -> None
+    def get_data(self, rdma: str, port: str, smlid: str, lnk_state: str, virt_hca: str) -> None:
         self._port = port
         self._rdma = rdma
         self._smlid = smlid
@@ -1642,8 +1640,7 @@ class SaSmpQueryDevice(object):
             self.sm_guid = self.get_info_from_sa_smp_query_data(".*GUID.*", "\.+(.*)")
             self.sm_guid = extract_string_by_regex(self.sm_guid, "0x(.*)")
 
-    def get_info_from_sa_smp_query_data(self, search_regex, output_regex):
-        # type: (re.Pattern, re.Pattern) -> str
+    def get_info_from_sa_smp_query_data(self, search_regex: re.Pattern, output_regex: re.Pattern) -> str:
         search_result = find_in_list(self.data, search_regex)
         search_result = extract_string_by_regex(search_result, output_regex)
         return str(search_result).strip()
