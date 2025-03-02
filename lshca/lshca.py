@@ -1647,16 +1647,14 @@ class SaSmpQueryDevice(object):
 
 
 class MlxCable(object):
-    def __init__(self, data_source):
-        # type: (DataSource) -> None
+    def __init__(self, data_source: DataSource) -> None:
         self._data_source = data_source
 
         self.cable_length = ""
         self.cable_pn = ""
         self.cable_sn = ""
 
-    def get_data(self, mst_cable):
-        # type: (str) -> None
+    def get_data(self, mst_cable: str) -> None:
         if mst_cable == "":
             return
         data = self._data_source.exec_shell_cmd("mlxcables -d " + mst_cable, use_cache=True)
@@ -1666,16 +1664,14 @@ class MlxCable(object):
 
 
 class MlxLink(object):
-    def __init__(self, data_source):
-        # type: (DataSource) -> None
+    def __init__(self, data_source: DataSource) -> None:
         self._data_source = data_source
 
         self.physical_link_recommendation = ""
         self.physical_link_speed = ""
         self.physical_link_status = ""
 
-    def get_data(self, mst_device, port=1):
-        # type: (str, int) -> None
+    def get_data(self, mst_device: str, port: int = 1) -> None:
         if mst_device == "":
             return
         data = self._data_source.exec_shell_cmd("mlxlink -d {} -p {} --json".format(mst_device, port), use_cache=True)
