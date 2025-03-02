@@ -1274,8 +1274,7 @@ class PCIDevice(object):
 
 
 class SYSFSDevice(object):
-    def __init__(self, bdf, data_source, config, port=1, sf=""):
-        # type: (str, DataSource, Config, int, str) -> None
+    def __init__(self, bdf: str, data_source: DataSource, config: Config, port: int = 1, sf: str = "") -> None:
         self._bdf = bdf
         self._config = config
         self._data_source = data_source
@@ -1290,8 +1289,7 @@ class SYSFSDevice(object):
 
         self.driver = "Undefined"
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         delim = " "
         return "SYS device:" + delim +\
                self._bdf + delim + \
@@ -1299,7 +1297,7 @@ class SYSFSDevice(object):
                self.vfParent + delim + \
                self.numa
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> str:
         '''
             There is no data that can be rettrieved from SysFS if the BDF was assigned to VM
             And I don't want to set all of the atributes in the constructor
@@ -1310,8 +1308,7 @@ class SYSFSDevice(object):
         else:
             raise AttributeError(item)
 
-    def get_data(self):
-        # type: () -> None
+    def get_data(self) -> None:
         tmp = self._data_source.read_link_if_exists(self._sys_prefix + '/driver')
         self.driver = extract_string_by_regex(tmp, '.*/([-_A-Za-z0-9]*)')
 
@@ -1540,8 +1537,7 @@ class SYSFSDevice(object):
         else:
             self.sf_list = []
 
-    def get_traffic(self):
-        # type: () -> None
+    def get_traffic(self) -> None:
         # see https://community.mellanox.com/s/article/understanding-mlx5-linux-counters-and-status-parameters for more info about the counteres
         if self.lnk_state == "down" or self.lnk_state == "":
             return
