@@ -2493,7 +2493,7 @@ class BColors:
     UNDERLINE = '\033[4m'
 
 
-def extract_string_by_regex(data_string, regex, na_string="=N/A="):
+def extract_string_by_regex(data_string: str, regex: re.Pattern, na_string: str = "=N/A=") -> str:
     # The following will print first GROUP in the regex, thus grouping should be used
     try:
         search_result = re.search(regex, data_string).group(1)
@@ -2502,9 +2502,7 @@ def extract_string_by_regex(data_string, regex, na_string="=N/A="):
 
     return search_result
 
-
-def find_in_list(list_to_search_in, regex_pattern, return_only_first_group=True):
-    # type: (list, re.Pattern, bool) -> str
+def find_in_list(list_to_search_in: list, regex_pattern: re.Pattern, return_only_first_group: bool = True) -> str:
     regex = re.compile(regex_pattern)
     result = [m.group(0) for l in list_to_search_in for m in [regex.search(l)] if m]
 
@@ -2516,14 +2514,12 @@ def find_in_list(list_to_search_in, regex_pattern, return_only_first_group=True)
     else:
         return ""
 
-def search_in_list_and_extract_by_regex(data_list, search_regex, output_regex):
-    # type: (list, re.Pattern, re.Pattern) -> str
+def search_in_list_and_extract_by_regex(data_list: list, search_regex: re.Pattern, output_regex: re.Pattern) -> str:
     list_search_result = find_in_list(data_list, search_regex)
     regex_search_result = extract_string_by_regex(list_search_result, output_regex)
     return str(regex_search_result).strip()
 
-def humanize_number(num, precision=1):
-    # type: (int, int) -> str
+def humanize_number(num: int, precision: int = 1) -> str:
     abbrevs = (
         (10 ** 15, 'P'),
         (10 ** 12, 'T'),
@@ -2539,14 +2535,12 @@ def humanize_number(num, precision=1):
             break
     return '%.*f%s' % (precision, num / factor, suffix)
 
-def get_lshca_version():
-    # type: () -> str
+def get_lshca_version() -> str:
     # used by setup.py for automatic version identification
     config = Config()
     return config.ver
 
-def remove_duplicates(orig_list):
-    # type: (list) -> list
+def remove_duplicates(orig_list: list) -> list:
     # Using this function to remove duplicates without changing the order of the list
     resulting_list = []
     for l in orig_list:
