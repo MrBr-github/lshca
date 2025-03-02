@@ -2239,14 +2239,11 @@ class MlnxHCA(object):
 
 
 class MlnxRdmaBondDevice(MlnxBDFDevice):
-    def get_data(self):
-        # type: () -> None
-        #Using python2 super notation for cross version compatability
-        super(MlnxRdmaBondDevice, self).get_data()
+    def get_data(self) -> None:
+        super().get_data()
         self._fix_rdma_bond()
 
-    def _fix_rdma_bond(self):
-        # type: () -> None
+    def _fix_rdma_bond(self) -> None:
         self.bdf = "rdma_" + re.sub(r'([0-9]+)', r'_\1' , self.bond_master)
         self.net = self.bond_master
         self.bond_master = ""
