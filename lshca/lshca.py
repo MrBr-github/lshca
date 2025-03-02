@@ -657,121 +657,6 @@ class DataSource(object):
         return output
 
 
-class HCAManager(object):
-    def __init__(self, data_source, config):
-        # type: (DataSource, Config) -> None
-        self._config = config
-        self._data_source = data_source
-        self.mlnxHCAs = [] # type: list[MlnxHCA]
-
-    def get_data(self):
-        # type: () -> None
-        mlnx_bdf_list = []
-        # Same lspci cmd used in MST source in order to benefit from cache
-        data = self._data_source.exec_shell_cmd("lspci -vvvDnnd 15b3:", use_cache=True)
-        raw_mlnx_bdf_list = find_in_list(data, r'^0000:[0-9a-f]{2}:.*', return_only_first_group=False)
-        for member in raw_mlnx_bdf_list:
-            bdf = extract_string_by_regex(member, "(.+) (Ethernet|Infini[Bb]and|Network)")
-
-            if bdf != "=N/A=":
-                mlnx_bdf_list.append(bdf)
-
-        mlnx_bdf_devices = [] # type: list[MlnxBDFDevice]
-        for bdf in mlnx_bdf_list:
-            port_count = 1
-
-            while True:
-                bdf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count)
-                bdf_dev.get_data()
-                mlnx_bdf_devices.append(bdf_dev)
-
-                for sf in bdf_dev.sf_list:
-                    sf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count, sf=sf)
-                    sf_dev.get_data()
-                    mlnx_bdf_devices.append(sf_dev)
-
-
-                if port_count >= len(bdf_dev.port_list):
-                    break
-
-                port_count += 1
-
-        # First handle all PFs
-        for bdf_dev in mlnx_bdf_devices:
-            rdma_bond_bdf = None
-
-            # Only first slave interface in a bond has infiniband information on his sysfs
-            if bdf_dev.bond_master != "=N/A=" and bdf_dev.bond_master != "ovs-system" and bdf_dev.rdma != "" :
-                rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, self._data_source, self._config)
-                rdma_bond_bdf.get_data()
-
-            if bdf_dev.sriov in ("PF", "PF" + self._config.warning_sign, "SF"):
-                hca_found = False
-                for hca in self.mlnxHCAs:
-                    if hca.sys_image_guid and bdf_dev.sys_image_guid == hca.sys_image_guid or \
-                      bdf_dev.sn == hca.sn:
-                        hca_found = True
-                        if rdma_bond_bdf:
-                            hca.add_bdf_dev(rdma_bond_bdf)
-                        hca.add_bdf_dev(bdf_dev)
-
-                if not hca_found:
-                    if rdma_bond_bdf:
-                        hca = MlnxHCA(rdma_bond_bdf, self._config, self._data_source)
-                        hca.add_bdf_dev(bdf_dev)
-                    else:
-                        hca = MlnxHCA(bdf_dev,  self._config, self._data_source)
-                    hca.hca_index = len(self.mlnxHCAs) + 1
-                    self.mlnxHCAs.append(hca)
-
-                if not hca.hca_data_retrieved:
-                    hca.get_data(bdf_dev)
-                    if rdma_bond_bdf:
-                        bdf_dev.rdma = ""
-                        bdf_dev.lnk_state = ""
-
-
-        # Now handle all VFs
-        for bdf_dev in mlnx_bdf_devices:
-            if bdf_dev.sriov == 'VF':
-                vf_parent_bdf = bdf_dev.vfParent
-
-                # TBD: refactor to function
-                for parent_bdf_dev in mlnx_bdf_devices:
-                    parent_found = False
-                    if vf_parent_bdf == parent_bdf_dev.bdf:
-                        parent_found = True
-
-                        hca = self._get_hca_by_sys_image_guid(parent_bdf_dev.sys_image_guid)
-                        if hca is not None:
-                            hca.add_bdf_dev(bdf_dev)
-                        else:
-                            raise Exception("VF " + str(bdf_dev) + " This device has no parent PF")
-
-                    if parent_found:
-                        break
-
-        if self._config.show_warnings_and_errors:
-            for hca in self.mlnxHCAs:
-                hca.check_for_issues()
-
-    def display_hcas_info(self):
-        # type: () -> None
-        out = Output(self._config, self._data_source)
-        for hca in self.mlnxHCAs:
-            output_info = hca.output_info()
-            out.append(output_info)
-
-        out.print_output()
-
-    def _get_hca_by_sys_image_guid(self, sys_image_guid):
-        # type: (str) -> MlnxHCA
-        for hca in self.mlnxHCAs:
-            if sys_image_guid == hca.sys_image_guid:
-                return hca
-        return None
-
-
 class Output(object):
     def __init__(self, config, data_source):
         # type: (Config, DataSource) -> None
@@ -2236,6 +2121,121 @@ class MlnxHCA(object):
         if bond_type == "802.3ad" and len(inactive_bond_slaves) > 0:
             for bdf in inactive_bond_slaves:
                 bdf.bond_state = bdf.bond_state + self.config.error_sign
+
+
+class HCAManager(object):
+    def __init__(self, data_source, config):
+        # type: (DataSource, Config) -> None
+        self._config = config
+        self._data_source = data_source
+        self.mlnxHCAs = [] # type: list[MlnxHCA]
+
+    def get_data(self):
+        # type: () -> None
+        mlnx_bdf_list = []
+        # Same lspci cmd used in MST source in order to benefit from cache
+        data = self._data_source.exec_shell_cmd("lspci -vvvDnnd 15b3:", use_cache=True)
+        raw_mlnx_bdf_list = find_in_list(data, r'^0000:[0-9a-f]{2}:.*', return_only_first_group=False)
+        for member in raw_mlnx_bdf_list:
+            bdf = extract_string_by_regex(member, "(.+) (Ethernet|Infini[Bb]and|Network)")
+
+            if bdf != "=N/A=":
+                mlnx_bdf_list.append(bdf)
+
+        mlnx_bdf_devices = [] # type: list[MlnxBDFDevice]
+        for bdf in mlnx_bdf_list:
+            port_count = 1
+
+            while True:
+                bdf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count)
+                bdf_dev.get_data()
+                mlnx_bdf_devices.append(bdf_dev)
+
+                for sf in bdf_dev.sf_list:
+                    sf_dev = MlnxBDFDevice(bdf, self._data_source, self._config, port_count, sf=sf)
+                    sf_dev.get_data()
+                    mlnx_bdf_devices.append(sf_dev)
+
+
+                if port_count >= len(bdf_dev.port_list):
+                    break
+
+                port_count += 1
+
+        # First handle all PFs
+        for bdf_dev in mlnx_bdf_devices:
+            rdma_bond_bdf = None
+
+            # Only first slave interface in a bond has infiniband information on his sysfs
+            if bdf_dev.bond_master != "=N/A=" and bdf_dev.bond_master != "ovs-system" and bdf_dev.rdma != "" :
+                rdma_bond_bdf = MlnxRdmaBondDevice(bdf_dev.bdf, self._data_source, self._config)
+                rdma_bond_bdf.get_data()
+
+            if bdf_dev.sriov in ("PF", "PF" + self._config.warning_sign, "SF"):
+                hca_found = False
+                for hca in self.mlnxHCAs:
+                    if hca.sys_image_guid and bdf_dev.sys_image_guid == hca.sys_image_guid or \
+                      bdf_dev.sn == hca.sn:
+                        hca_found = True
+                        if rdma_bond_bdf:
+                            hca.add_bdf_dev(rdma_bond_bdf)
+                        hca.add_bdf_dev(bdf_dev)
+
+                if not hca_found:
+                    if rdma_bond_bdf:
+                        hca = MlnxHCA(rdma_bond_bdf, self._config, self._data_source)
+                        hca.add_bdf_dev(bdf_dev)
+                    else:
+                        hca = MlnxHCA(bdf_dev,  self._config, self._data_source)
+                    hca.hca_index = len(self.mlnxHCAs) + 1
+                    self.mlnxHCAs.append(hca)
+
+                if not hca.hca_data_retrieved:
+                    hca.get_data(bdf_dev)
+                    if rdma_bond_bdf:
+                        bdf_dev.rdma = ""
+                        bdf_dev.lnk_state = ""
+
+
+        # Now handle all VFs
+        for bdf_dev in mlnx_bdf_devices:
+            if bdf_dev.sriov == 'VF':
+                vf_parent_bdf = bdf_dev.vfParent
+
+                # TBD: refactor to function
+                for parent_bdf_dev in mlnx_bdf_devices:
+                    parent_found = False
+                    if vf_parent_bdf == parent_bdf_dev.bdf:
+                        parent_found = True
+
+                        hca = self._get_hca_by_sys_image_guid(parent_bdf_dev.sys_image_guid)
+                        if hca is not None:
+                            hca.add_bdf_dev(bdf_dev)
+                        else:
+                            raise Exception("VF " + str(bdf_dev) + " This device has no parent PF")
+
+                    if parent_found:
+                        break
+
+        if self._config.show_warnings_and_errors:
+            for hca in self.mlnxHCAs:
+                hca.check_for_issues()
+
+    def display_hcas_info(self):
+        # type: () -> None
+        out = Output(self._config, self._data_source)
+        for hca in self.mlnxHCAs:
+            output_info = hca.output_info()
+            out.append(output_info)
+
+        out.print_output()
+
+    def _get_hca_by_sys_image_guid(self, sys_image_guid):
+        # type: (str) -> MlnxHCA
+        for hca in self.mlnxHCAs:
+            if sys_image_guid == hca.sys_image_guid:
+                return hca
+        return None
 
 
 class MlnxRdmaBondDevice(MlnxBDFDevice):
