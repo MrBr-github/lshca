@@ -1827,8 +1827,7 @@ class MiscCMDs(object):
 
 
 class MlnxBDFDevice(object):
-    def __init__(self, bdf, data_source, config, port=1, sf=""):
-        # type: (str, DataSource, Config, int, str) -> None
+    def __init__(self, bdf: str, data_source: DataSource, config: Config, port: int = 1, sf: str = "") -> None:
         self.bdf = bdf
         self._config = config
         self._data_source = data_source
@@ -1846,9 +1845,7 @@ class MlnxBDFDevice(object):
         self._lldpData = LldpData(self._data_source, self._config)
         self._Rshim = RshimDevice(self.bdf, self._data_source, self._config)
 
-    def get_data(self):
-        # type: () -> None
-
+    def get_data(self) -> None:
         # ------ SysFS ------
         self._sysFSDevice.get_data()
         self.fw = self._sysFSDevice.fw
@@ -1986,8 +1983,7 @@ class MlnxBDFDevice(object):
             self._Rshim.get_data()
         self.rshim_dev = self._Rshim.rshim_dev
 
-    def _is_dpu(self):
-        # type: () -> bool
+    def _is_dpu(self) -> bool:
         # This function decides on well known Mellanox PCI ids taken from the https://pci-ids.ucw.cz/read/PC/15b3
         # it comes to eliminate usage of slow mlxconfig and mlxprivhost utils on non dpu HCAs
         # all BF DPUs start with a2xx or c2xx
@@ -1996,14 +1992,12 @@ class MlnxBDFDevice(object):
         else:
             return False
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         return self._sysFSDevice.__repr__() + "\n" + self._pciDevice.__repr__() + "\n" + \
                 self._mstDevice.__repr__() + "\n"
 
     @property
-    def sriov(self):
-        # type: () -> str
+    def sriov(self) -> str:
         if self._config.show_warnings_and_errors is True and self._sysFSDevice.sriov == "PF" and \
                 re.match(r".*[Vv]irtual [Ff]unction.*", self._pciDevice.description):
             return self._sysFSDevice.sriov + self._config.warning_sign
@@ -2011,8 +2005,7 @@ class MlnxBDFDevice(object):
             return self._sysFSDevice.sriov
 
     @property
-    def roce_status(self):
-        # type: () -> str
+    def roce_status(self) -> str:
         if self.link_layer == "IB" or self._config.in_use_by_vm_str in self.rdma or \
           not ( self._config.output_view == "roce" or self._config.output_view == "all"):
             return "N/A"
@@ -2068,8 +2061,7 @@ class MlnxBDFDevice(object):
         return retval
 
     @property
-    def dpu_mode(self):
-        # type: () -> str
+    def dpu_mode(self) -> str:
         if not self._is_dpu():
             return ""
 
@@ -2094,14 +2086,12 @@ class MlnxBDFDevice(object):
 
         return mode
 
-    def get_traff(self):
-        # type: () -> None
+    def get_traff(self) -> None:
         self.sysFSDevice.get_traffic()
         self.traff_tx_bitps = self.sysFSDevice.traff_tx_bitps
         self.traff_rx_bitps = self.sysFSDevice.traff_rx_bitps
 
-    def output_info(self):
-        # type: () -> dict
+    def output_info(self) -> dict:
         if self.sriov in ("PF", "PF" + self._config.warning_sign):
             sriov = self.sriov + "  "
         else:
