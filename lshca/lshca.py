@@ -2334,8 +2334,7 @@ class LldpData:
     LLDP_TLV_LENGTH_BITMASK = int(0b0000000111111111) # last 9 bits of 2 bytes
     LLDP_TLV_TYPE_SHIFT = 9
 
-    def __init__(self, data_source, config):
-        # type: (DataSource, Config) -> None
+    def __init__(self, data_source: DataSource, config: Config) -> None:
         self._config = config
         self._data_source = data_source
         self._interface = None
@@ -2348,8 +2347,7 @@ class LldpData:
         self.system_name = ""
         self.system_description = ""
 
-    def parse_lldp_packet(self, rcvd_packet):
-        # type: (tuple) -> None
+    def parse_lldp_packet(self, rcvd_packet: tuple) -> None:
         # Packet example
         # (b'\x01\x80\xc2\x00\x00\x0e\xb8Y\x9f\xa9\x9c`\x88\xcc\x02\x07\x04\xb8Y\x9f\xa9\x9c\x00\x04\x07\x05Eth1/1\x06\x02\x00x\x08\x01 \n\tanc-dx-t1\x0c\x18MSN3700,Onyx,SWv3.9.0914\x0e\x04\x00\x14\x00\x04\x10\x16\x05\x01\n\x90\xfc\x85\x02\x00\x00\x00\x00\n+\x06\x01\x02\x01\x02\x02\x01\x01\x00\xfe\x19\x00\x80\xc2\t\x08\x00\x03\x00`2\x00\x002\x00\x00\x00\x00\x02\x02\x02\x02\x02\x02\x00\x02\xfe\x19\x00\x80\xc2\n\x00\x00\x03\x00`2\x00\x002\x00\x00\x00\x00\x02\x02\x02\x02\x02\x02\x00\x02\xfe\x06\x00\x80\xc2\x0b\x08\x08\xfe\x08\x00\x80\xc2\x0c\x00c\x12\xb7\x00\x00', ('ens1f0', 35020, 2, 1, b'\xb8Y\x9f\xa9\x9c`'))
         if rcvd_packet:
@@ -2411,8 +2409,7 @@ class LldpData:
             except:
                 self.mgmt_addr = "Fail2Decode"
 
-    def lldp_err_msg(self, msg, sign):
-        # type: (str, str) -> None
+    def lldp_err_msg(self, msg: str, sign: str) -> None:
         if self._config.show_warnings_and_errors is True:
             msg += sign
         self.port_id = msg
@@ -2420,8 +2417,7 @@ class LldpData:
         self.system_description = msg
         self.mgmt_addr = msg
 
-    def get_data(self, net, ip_state, bond_master):
-        # type: (str, str, str) -> None
+    def get_data(self, net: str, ip_state: str, bond_master: str) -> None:
         self._interface = net
         self._bond_master = bond_master
 
@@ -2443,15 +2439,14 @@ class LldpData:
 
 
 class RshimDevice(object):
-    def __init__(self, bdf, data_source, config):
-        # type: (str, DataSource, Config) -> None
+    def __init__(self, bdf: str, data_source: DataSource, config: Config) -> None:
         self._bdf = bdf
         self._config = config
         self._data_source = data_source
 
         self.rshim_dev = ""
 
-    def get_data(self):
+    def get_data(self) -> None:
         dev_list = self._data_source.list_dir_if_exists('/dev')
         rshim_list = find_in_list(dev_list.split(' '),r'rshim[0-9]+',return_only_first_group=False)
 
