@@ -29,7 +29,7 @@ import time
 
 
 from io import StringIO, BytesIO
-
+from typing import List
 
 class Config(object):
     def __init__(self) -> None:
@@ -2144,9 +2144,8 @@ class MlnxBDFDevice(object):
 
 
 class MlnxHCA(object):
-    def __init__(self, bdf_dev, config, data_source):
-        # type: (MlnxBDFDevice, Config, DataSource) -> None
-        self.bdf_devices = [] #  type: list[MlnxBDFDevice]
+    def __init__(self, bdf_dev: MlnxBDFDevice, config: Config, data_source: DataSource) -> None:
+        self.bdf_devices: List[MlnxBDFDevice] = []
         self.config = config
         self.data_source = data_source
 
@@ -2160,15 +2159,13 @@ class MlnxHCA(object):
         self.sys_image_guid = bdf_dev.sys_image_guid
         self.sn = bdf_dev.sn
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         output = ""
         for bdf_dev in self.bdf_devices:
             output = output + str(bdf_dev)
         return output
 
-    def get_data(self, bdf_dev):
-        # type: (MlnxBDFDevice) -> None
+    def get_data(self, bdf_dev: MlnxBDFDevice) -> None:
         # this function retrieves information thats relevant to the whole HCA, thus reducing executiotion tim on per BDF level
         if self.config.in_use_by_vm_str in bdf_dev.rdma:
             return
@@ -2186,17 +2183,14 @@ class MlnxHCA(object):
         self.rshim_dev = bdf_dev.rshim_dev
 
     @property
-    def hca_index(self):
-        # type: () -> str
+    def hca_index(self) -> str:
         return "#" + str(self._hca_index)
 
     @hca_index.setter
-    def hca_index(self, index):
-        # type: (int) -> None
+    def hca_index(self, index: int) -> None:
         self._hca_index = index
 
-    def add_bdf_dev(self, new_bdf_dev):
-        # type: (MlnxBDFDevice) -> None
+    def add_bdf_dev(self, new_bdf_dev: MlnxBDFDevice) -> None:
         if new_bdf_dev.sriov == "VF" and new_bdf_dev.vfParent != "-":
             for i, bdf_dev in enumerate(self.bdf_devices):
                 if bdf_dev.bdf == new_bdf_dev.vfParent:
@@ -2211,8 +2205,7 @@ class MlnxHCA(object):
                     return
             self.bdf_devices.append(new_bdf_dev)
 
-    def output_info(self):
-        # type: () -> dict
+    def output_info(self) -> dict:
         output = {"SN": self.sn,
                   "PN": self.pn,
                   "FW": self.fw,
@@ -2229,8 +2222,7 @@ class MlnxHCA(object):
             output["bdf_devices"].append(bdf_dev.output_info())
         return output
 
-    def check_for_issues(self):
-        # type: () -> None
+    def check_for_issues(self) -> None:
         # this function comes to check for issues on HCA level cross all BDFs
         inactive_bond_slaves = []
         bond_type = ""
