@@ -1763,29 +1763,25 @@ class OvsVsctl(object):
 
 
 class MiscCMDs(object):
-    def __init__(self, data_source, config):
-        # type: (DataSource, Config) -> None
+    def __init__(self, data_source: DataSource, config: Config) -> None:
         self.data_source = data_source
         self.config = config
 
-    def get_mlnx_qos_trust(self, net):
-        # type: (str) -> str
+    def get_mlnx_qos_trust(self, net: str) -> str:
         data = self.data_source.exec_shell_cmd("mlnx_qos -i " + net, use_cache=True)
         regex = "Priority trust state: (.*)"
         search_result = find_in_list(data, regex)
         search_result = extract_string_by_regex(search_result, regex)
         return search_result
 
-    def get_mlnx_qos_pfc(self, net):
-        # type: (str) -> str
+    def get_mlnx_qos_pfc(self, net: str) -> str:
         data = self.data_source.exec_shell_cmd("mlnx_qos -i " + net, use_cache=True)
         regex = '^\s+enabled\s+(([0-9]\s+)+)'
         search_result = find_in_list(data, regex)
         search_result = extract_string_by_regex(search_result, regex).replace(" ", "")
         return search_result
 
-    def get_tempr(self, rdma):
-        # type: (str) -> str
+    def get_tempr(self, rdma: str) -> str:
         data = self.data_source.exec_shell_cmd("mget_temp -d " + rdma, use_cache=True)
         regex = '^([0-9]+)\s+$'
         search_result = find_in_list(data, regex)
@@ -1799,8 +1795,7 @@ class MiscCMDs(object):
         except ValueError:
             return "=N/A="
 
-    def get_driver_ver(self):
-        # type: () -> str
+    def get_driver_ver(self) -> str:
         mofed_ver_raw = str(self.data_source.exec_shell_cmd("ofed_info -s ", use_cache=True, report_cmd_error=False))
         regex = '.*MLNX_OFED_LINUX-(.*):.*'
         mofed_ver = extract_string_by_regex(mofed_ver_raw, regex)
@@ -1824,8 +1819,7 @@ class MiscCMDs(object):
             self.data_source.log.error(err_msg)
             return self.config.na_str
 
-    def get_bfb_version(self, inside_dpu):
-        # type: (bool) -> str
+    def get_bfb_version(self, inside_dpu: bool) -> str:
         if not inside_dpu:
             return ""
         ver = self.data_source.read_file_if_exists("/etc/mlnx-release", use_cache=True)
