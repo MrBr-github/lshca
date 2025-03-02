@@ -1696,8 +1696,7 @@ class MlxLink(object):
 
 
 class MlxConfig(object):
-    def __init__(self, data_source):
-        # type: (DataSource) -> None
+    def __init__(self, data_source: DataSource) -> None:
         self._data_source = data_source
 
         self.internal_cpu_model = ""
@@ -1706,8 +1705,7 @@ class MlxConfig(object):
         self.internal_cpu_cpu_ib_vport0 = ""
         self.internal_cpu_offload_engine = "    "
 
-    def get_data(self, mst_device):
-        # type: (str) -> None
+    def get_data(self, mst_device: str) -> None:
         if mst_device == "":
             return
 
@@ -1724,14 +1722,12 @@ class MlxConfig(object):
 
 
 class MlxPrivHost(object):
-    def __init__(self, data_source):
-        # type: (DataSource) -> None
+    def __init__(self, data_source: DataSource) -> None:
         self._data_source = data_source
 
         self.restric_level = ""
 
-    def get_data(self, mst_device):
-        # type: (str) -> None
+    def get_data(self, mst_device: str) -> None:
         if mst_device == "":
             return
 
@@ -1745,8 +1741,7 @@ class MlxPrivHost(object):
 
 
 class OvsVsctl(object):
-    def __init__(self, data_source):
-        # type: (DataSource) -> None
+    def __init__(self, data_source: DataSource) -> None:
         self._data_source = data_source
 
         self.ovs_bridge = ""
@@ -1754,8 +1749,7 @@ class OvsVsctl(object):
         self.pf_repr = ""
         self.vf_repr = ""
 
-    def get_data(self, net):
-        # type: (str) -> None
+    def get_data(self, net: str) -> None:
         data = {}
         ovsvctl_list_br = self._data_source.exec_shell_cmd("ovs-vsctl list-br", use_cache=True)
         for bridge in ovsvctl_list_br:
