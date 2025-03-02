@@ -2124,14 +2124,12 @@ class MlnxHCA(object):
 
 
 class HCAManager(object):
-    def __init__(self, data_source, config):
-        # type: (DataSource, Config) -> None
+    def __init__(self, data_source: DataSource, config: Config) -> None:
         self._config = config
         self._data_source = data_source
         self.mlnxHCAs = [] # type: list[MlnxHCA]
 
-    def get_data(self):
-        # type: () -> None
+    def get_data(self) -> None:
         mlnx_bdf_list = []
         # Same lspci cmd used in MST source in order to benefit from cache
         data = self._data_source.exec_shell_cmd("lspci -vvvDnnd 15b3:", use_cache=True)
@@ -2221,8 +2219,7 @@ class HCAManager(object):
             for hca in self.mlnxHCAs:
                 hca.check_for_issues()
 
-    def display_hcas_info(self):
-        # type: () -> None
+    def display_hcas_info(self) -> None:
         out = Output(self._config, self._data_source)
         for hca in self.mlnxHCAs:
             output_info = hca.output_info()
@@ -2230,8 +2227,7 @@ class HCAManager(object):
 
         out.print_output()
 
-    def _get_hca_by_sys_image_guid(self, sys_image_guid):
-        # type: (str) -> MlnxHCA
+    def _get_hca_by_sys_image_guid(self, sys_image_guid: str) -> MlnxHCA:
         for hca in self.mlnxHCAs:
             if sys_image_guid == hca.sys_image_guid:
                 return hca
