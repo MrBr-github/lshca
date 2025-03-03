@@ -658,8 +658,7 @@ class DataSource(object):
 
 
 class Output(object):
-    def __init__(self, config, data_source):
-        # type: (Config, DataSource) -> None
+    def __init__(self, config: Config, data_source: DataSource) -> None:
         self.config = config
         self.data_source = data_source
         self.output = []
@@ -669,11 +668,10 @@ class Output(object):
         self.output_filter = {}
         self.output_order = self.config.output_order
 
-    def append(self, data):
+    def append(self, data: dict) -> None:
         self.output.append(data)
 
-    def apply_select_output_filters(self):
-        # type: () -> None
+    def apply_select_output_filters(self) -> None:
         if len(self.config.output_fields_filter_positive) > 0:
             self.output_order = self.config.output_fields_filter_positive
         elif len(self.config.output_fields_filter_negative) > 0:
@@ -699,8 +697,7 @@ class Output(object):
             for bdf_device in hca["bdf_devices"]:
                 bdf_device.pop(key, None)
 
-    def apply_where_output_filters(self):
-        # type: () -> None
+    def apply_where_output_filters(self) -> None:
         if not self.config.where_output_filter:
             return
 
@@ -739,8 +736,7 @@ class Output(object):
             for hca in remove_hca_list:
                 self.output.remove(hca)
 
-    def elastic_output(self):
-        # type: () -> None
+    def elastic_output(self) -> None:
         for hca in self.output:
             hca_fields_to_remove = {}
             bfb_fields_to_remove = {}
@@ -850,16 +846,13 @@ class Output(object):
             for index in bdf_devices_to_remove:
                 del hca["bdf_devices"][index]
 
-
-    def filter_out_data(self):
-        # type: () -> None
+    def filter_out_data(self) -> None:
         self.apply_where_output_filters()
         self.apply_select_output_filters()
         if self.config.output_format == "human_readable" and self.config.output_format_elastic:
             self.elastic_output()
 
-    def update_separator_and_column_width(self):
-        # type: () -> None
+    def update_separator_and_column_width(self) -> None:
         # function calculates self.column_width values and self.separator_len
 
         # first pass: collect all of the maximum widths for each of the BDF fields
@@ -908,8 +901,7 @@ class Output(object):
             bdf_device_line_width = sum(curr_hca_column_width.values()) + (len(curr_hca_column_width) - 1 ) * 3 + 1
             self.separator_len = max(self.separator_len, bdf_device_line_width, hca_field_line_width)
 
-    def print_output(self):
-        # type: () -> None
+    def print_output(self) -> None:
         self.filter_out_data()
 
         if self.config.output_format == "human_readable":
@@ -921,8 +913,7 @@ class Output(object):
         elif self.config.output_format == "json":
             self.print_output_json()
 
-    def colour_warnings_and_errors(self, field_value):
-        # type: (str) -> str
+    def colour_warnings_and_errors(self, field_value: str) -> str:
         if self.config.show_warnings_and_errors and self.config.colour_warnings_and_errors:
             if re.search(re.escape(self.config.error_sign) + "$", str(field_value).strip()):
                 field_value = BColors.FAIL + field_value + BColors.ENDC
@@ -931,8 +922,7 @@ class Output(object):
 
         return field_value
 
-    def print_output_human_readable(self):
-        # type: () -> None
+    def print_output_human_readable(self) -> None:
         self.separator = self.config.output_separator_char * self.separator_len
 
         print(self.separator)
@@ -942,12 +932,10 @@ class Output(object):
             self.print_bdf_devices(hca["bdf_devices"])
             print(self.separator)
 
-    def print_output_json(self):
-        # type: () -> None
+    def print_output_json(self) -> None:
         print(json.dumps(self.output, indent=4, sort_keys=True))
 
-    def print_hca_header(self, args):
-        # type: (dict) -> None
+    def print_hca_header(self, args: dict) -> None:
         order_dict = {}
 
         position = 0
@@ -972,7 +960,7 @@ class Output(object):
         if output_list:
             print('\n'.join(output_list))
 
-    def print_bdf_devices(self, args):
+    def print_bdf_devices(self, args: list) -> None:
         # type: (list) -> None
         count = 1
         order_dict = {}
