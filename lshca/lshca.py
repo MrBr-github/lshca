@@ -998,8 +998,7 @@ class MSTDevice(object):
     mst_service_initialized = False
     mst_service_should_be_stopped = False
 
-    def __init__(self, data_source, config):
-        # type: (DataSource, Config) -> None
+    def __init__(self, data_source: DataSource, config: Config) -> None:
         self._config = config
         self._data_source = data_source
         self._mst_raw_data = None
@@ -1007,18 +1006,15 @@ class MSTDevice(object):
         self.mst_device = ""
         self.mst_cable = ""
 
-    def __del__(self):
-        # type: () -> None
+    def __del__(self) -> None:
         if MSTDevice.mst_service_should_be_stopped:
             self._data_source.exec_shell_cmd("mst stop", use_cache=True)
             MSTDevice.mst_service_should_be_stopped = False
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         return self._mst_raw_data
 
-    def init_mst_service(self):
-        # type: () -> None
+    def init_mst_service(self) -> None:
         if MSTDevice.mst_service_initialized or MSTDevice.mst_tool_missing:
             return
 
@@ -1041,8 +1037,7 @@ class MSTDevice(object):
 
         MSTDevice.mst_service_initialized = True
 
-    def get_data(self, bdf):
-        # type: (str) -> None
+    def get_data(self, bdf: str) -> None:
         if not MSTDevice.mst_service_initialized:
             return
 
