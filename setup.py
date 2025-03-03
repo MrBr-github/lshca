@@ -27,7 +27,6 @@ setup(
     'Intended Audience :: System Administrators',
     'Intended Audience :: Information Technology',
     'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-    'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3'
   ],
   entry_points={

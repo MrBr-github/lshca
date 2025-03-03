@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-from __future__ import print_function
+#!/usr/bin/env python3
 
 import argparse
 import difflib
@@ -176,10 +174,6 @@ def regression():
             sys.exit(1)
     else:
         file_list = os.listdir(rec_data_dir_path)
-        if sys.version_info.major == 3:
-            p3_only_files = os.listdir(os.path.join(rec_data_dir_path, "py3-only"))
-            p3_only_files = [ os.path.join("py3-only", f) for f in p3_only_files ]
-            file_list.extend(p3_only_files)
 
         recorded_data_files_list = []
         for file in file_list:
